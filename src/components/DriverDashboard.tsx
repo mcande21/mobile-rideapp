@@ -87,6 +87,7 @@ export function DriverDashboard() {
                 key={ride.id}
                 ride={ride}
                 onUpdateFare={handleUpdateFare}
+                showPhoneNumber={true}
               >
                 <Button
                   variant="outline"
@@ -124,6 +125,7 @@ export function DriverDashboard() {
                 key={ride.id}
                 ride={ride}
                 onUpdateFare={handleUpdateFare}
+                showPhoneNumber={true}
               />
             ))}
           </div>

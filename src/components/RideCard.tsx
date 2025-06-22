@@ -2,7 +2,6 @@ import { useState, type ReactNode } from "react";
 import {
   MapPin,
   CircleDollarSign,
-  User,
   CalendarDays,
   Clock,
   Plane,
@@ -11,6 +10,7 @@ import {
   Timer,
   Edit,
   Check,
+  Phone,
 } from "lucide-react";
 import type { Ride, TransportType } from "@/lib/types";
 import {
@@ -30,6 +30,7 @@ interface RideCardProps {
   ride: Ride;
   children?: ReactNode;
   onUpdateFare?: (rideId: string, fare: number) => void;
+  showPhoneNumber?: boolean;
 }
 
 const TransportIcon = ({ type }: { type: TransportType | undefined }) => {
@@ -40,7 +41,12 @@ const TransportIcon = ({ type }: { type: TransportType | undefined }) => {
   return null;
 };
 
-export function RideCard({ ride, children, onUpdateFare }: RideCardProps) {
+export function RideCard({
+  ride,
+  children,
+  onUpdateFare,
+  showPhoneNumber,
+}: RideCardProps) {
   const [isEditingFare, setIsEditingFare] = useState(false);
   const [newFare, setNewFare] = useState(ride.fare);
 
@@ -180,6 +186,17 @@ export function RideCard({ ride, children, onUpdateFare }: RideCardProps) {
                 </div>
               </div>
             </>
+          )}
+          {ride.user.phoneNumber && showPhoneNumber && (
+            <div className="flex items-center gap-3 text-sm">
+              <Phone className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <span className="font-semibold text-foreground">Phone:</span>
+                <span className="text-muted-foreground ml-2">
+                  {ride.user.phoneNumber}
+                </span>
+              </div>
+            </div>
           )}
           {ride.duration && (
             <div className="flex items-center gap-3 text-sm">
