@@ -35,7 +35,13 @@ interface RideState {
   loading: boolean;
   initAuth: () => () => void;
   login: (email: string, password: string) => Promise<void>;
-  signUp: (name: string, email: string, password: string) => Promise<void>;
+  signUp: (
+    name: string,
+    email: string,
+    password: string,
+    phoneNumber: string,
+    homeAddress?: string
+  ) => Promise<void>;
   logout: () => Promise<void>;
   addRide: (
     pickup: string,
@@ -102,7 +108,7 @@ export const useRideStore = create<RideState>((set, get) => ({
     if (!auth) throw new Error("Firebase not configured");
     await signInWithEmailAndPassword(auth, email, password);
   },
-  signUp: async (name, email, password) => {
+  signUp: async (name, email, password, phoneNumber, homeAddress) => {
     if (!auth || !db) throw new Error("Firebase not configured");
     const userCredential = await createUserWithEmailAndPassword(
       auth,
@@ -115,6 +121,8 @@ export const useRideStore = create<RideState>((set, get) => ({
       name,
       role: "user",
       avatarUrl: `https://placehold.co/100x100.png`,
+      phoneNumber,
+      ...(homeAddress && { homeAddress }),
     });
   },
   logout: async () => {

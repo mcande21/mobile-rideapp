@@ -8,6 +8,8 @@ export interface User {
   name: string;
   avatarUrl: string;
   role: UserRole;
+  phoneNumber: string;
+  homeAddress?: string;
 }
 
 export interface Ride {

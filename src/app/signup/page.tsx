@@ -26,6 +26,8 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [phoneNumber, setPhoneNumber] = useState("");
+  const [homeAddress, setHomeAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSigningUp, setIsSigningUp] = useState(false);
 
@@ -48,7 +50,7 @@ export default function SignUpPage() {
     setError(null);
     setIsSigningUp(true);
     try {
-      await signUp(name, email, password);
+      await signUp(name, email, password, phoneNumber, homeAddress);
     } catch (err: any) {
       if (err.code === "auth/email-already-in-use") {
         setError("This email is already in use.");
@@ -104,6 +106,27 @@ export default function SignUpPage() {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="phone">Phone Number</Label>
+              <Input
+                id="phone"
+                type="tel"
+                placeholder="123-456-7890"
+                value={phoneNumber}
+                onChange={(e) => setPhoneNumber(e.target.value)}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="home-address">Home Address (Optional)</Label>
+              <Input
+                id="home-address"
+                type="text"
+                placeholder="123 Main St, Anytown"
+                value={homeAddress}
+                onChange={(e) => setHomeAddress(e.target.value)}
               />
             </div>
             <div className="space-y-2">
