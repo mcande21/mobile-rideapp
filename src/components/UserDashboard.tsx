@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { useRideStore } from "@/lib/store";
 import { RideCard } from "./RideCard";
+import { suggestFare } from "@/ai/flows/suggest-fare-flow";
 import {
   Card,
   CardContent,
@@ -45,6 +46,7 @@ import {
   Plane,
   Train,
   Bus,
+  BadgeDollarSign,
 } from "lucide-react";
 import type { Direction, TransportType } from "@/lib/types";
 
@@ -62,18 +64,41 @@ export function UserDashboard() {
   const [transportType, setTransportType] = useState<TransportType | "">("");
   const [transportNumber, setTransportNumber] = useState("");
 
+  const [fare, setFare] = useState(0);
+  const [isCalculatingFare, setIsCalculatingFare] = useState(false);
+
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  const fare = useMemo(() => {
-    if (pickup.length > 2 && dropoff.length > 2) {
-      const calculatedFare = (pickup.length + dropoff.length) * 0.75 + 5;
-      return Math.round(calculatedFare * 100) / 100;
-    }
-    return 0;
-  }, [pickup, dropoff]);
+  useEffect(() => {
+    const handler = setTimeout(async () => {
+      if (pickup.length > 2 && dropoff.length > 2) {
+        setIsCalculatingFare(true);
+        try {
+          const result = await suggestFare({ pickup, dropoff });
+          setFare(result.fare);
+        } catch (e) {
+          console.error("Error suggesting fare:", e);
+          toast({
+            title: "Error Calculating Fare",
+            description: "Could not estimate the ride fare.",
+            variant: "destructive",
+          });
+          setFare(0);
+        } finally {
+          setIsCalculatingFare(false);
+        }
+      } else {
+        setFare(0);
+      }
+    }, 500); // 500ms debounce
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [pickup, dropoff, toast]);
 
   const handleRequestRide = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -95,7 +120,7 @@ export function UserDashboard() {
           title: "Ride Requested!",
           description: "We are finding a driver for you.",
         });
-        
+
         // Reset form
         setPickup("");
         setDropoff("");
@@ -104,6 +129,7 @@ export function UserDashboard() {
         setDirection("departure");
         setTransportType("");
         setTransportNumber("");
+        setFare(0);
       } catch (error) {
         toast({
           title: "Error",
@@ -293,15 +319,28 @@ export function UserDashboard() {
                 </div>
               </div>
 
-              {fare > 0 && (
-                <div className="text-center text-2xl font-bold text-foreground py-2">
-                  Estimated Fare: ${fare.toFixed(2)}
-                </div>
-              )}
+              <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
+                {isCalculatingFare ? (
+                  <>
+                    <Loader2 className="animate-spin" /> Calculating Fare...
+                  </>
+                ) : fare > 0 ? (
+                  <>
+                    <BadgeDollarSign/> Estimated Fare: ${fare.toFixed(2)}
+                  </>
+                ) : (
+                  <span className="text-sm text-muted-foreground">
+                    Enter locations to estimate fare
+                  </span>
+                )}
+              </div>
+
               <Button
                 type="submit"
                 className="w-full transition-all"
-                disabled={!fare || !date || !time || isSubmitting}
+                disabled={
+                  !fare || !date || !time || isSubmitting || isCalculatingFare
+                }
               >
                 {isSubmitting ? (
                   <Loader2 className="animate-spin" />
