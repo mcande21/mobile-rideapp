@@ -141,7 +141,7 @@ export const useRideStore = create<RideState>((set, get) => ({
       name: currentUserProfile.name,
       avatarUrl: currentUserProfile.avatarUrl,
       role: currentUserProfile.role,
-      phoneNumber: currentUserProfile.phoneNumber,
+      ...(currentUserProfile.phoneNumber && { phoneNumber: currentUserProfile.phoneNumber }),
       ...(currentUserProfile.homeAddress && { homeAddress: currentUserProfile.homeAddress }),
     };
 

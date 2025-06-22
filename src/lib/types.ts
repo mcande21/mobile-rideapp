@@ -8,7 +8,7 @@ export interface User {
   name: string;
   avatarUrl: string;
   role: UserRole;
-  phoneNumber: string;
+  phoneNumber?: string;
   homeAddress?: string;
 }
 
