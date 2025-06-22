@@ -1,0 +1,23 @@
+rules_version = '2';
+
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // By default, deny all reads and writes to all files.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+
+    // Allow users to manage their own avatar images.
+    // The path is structured as 'avatars/USER_ID/FILENAME'.
+    match /avatars/{userId}/{fileName} {
+
+      // Any authenticated user can read any avatar.
+      // Profile pictures are often public.
+      allow read: if request.auth != null;
+
+      // Only the authenticated user can upload or delete their own avatar.
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

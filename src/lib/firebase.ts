@@ -11,8 +11,13 @@ const firebaseConfig: FirebaseOptions = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// A check to see if the user has provided their Firebase config.
-const isConfigured = !!(firebaseConfig.apiKey && firebaseConfig.projectId);
+// A check to see if the user has provided their Firebase config and that they are not placeholder values.
+const isConfigured = !!(
+  firebaseConfig.apiKey &&
+  firebaseConfig.projectId &&
+  !firebaseConfig.apiKey.includes("YOUR_") &&
+  !firebaseConfig.projectId.includes("your-")
+);
 
 const app = isConfigured && !getApps().length ? initializeApp(firebaseConfig) : (isConfigured ? getApp() : undefined);
 const auth = app ? getAuth(app) : undefined;

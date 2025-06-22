@@ -38,6 +38,10 @@ function FirebaseNotConfigured() {
                 `.env.local` file in the root of your project and add your
                 Firebase project configuration.
               </p>
+              <p className="mt-4 font-semibold">
+                Please make sure you have replaced the placeholder values with your
+                actual Firebase project keys.
+              </p>
               <p className="mt-2 text-sm">
                 You can get these values from your Firebase project settings.
               </p>

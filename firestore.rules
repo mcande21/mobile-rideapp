@@ -1,0 +1,43 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // By default, deny all reads and writes to all documents.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Rules for the 'users' collection
+    match /users/{userId} {
+      // Any authenticated user can create their own user document.
+      // The document ID must match the UID of the user creating it.
+      allow create: if request.auth != null && request.auth.uid == userId;
+
+      // Only the authenticated user who owns the document can read or update it.
+      allow read, update: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Rules for the 'bookings' collection
+    match /bookings/{bookingId} {
+      // An authenticated user can create a booking for themselves.
+      // The `userId` field in the new document must match their own UID.
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid;
+
+      // A user can read a booking if they are the one who created it OR if they are the driver assigned to it.
+      // Any authenticated user can view the list of pending rides.
+      allow read: if request.auth != null;
+
+      // A booking can be updated by either the user who created it or the driver.
+      allow update: if request.auth != null && (
+        // Case 1: The user who created the booking is making the update (e.g., to cancel).
+        request.auth.uid == resource.data.userId ||
+        // Case 2: The assigned driver is making the update (e.g., to start or complete the ride).
+        request.auth.uid == resource.data.driverId ||
+        // Case 3: A driver is accepting a ride that doesn't have a driver yet.
+        (resource.data.driverId == null && request.resource.data.driverId == request.auth.uid)
+      );
+    }
+  }
+}
