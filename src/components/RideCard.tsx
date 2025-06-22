@@ -12,7 +12,7 @@ import {
   Edit,
   Check,
   Phone,
-  SteeringWheel,
+  UserRound,
 } from "lucide-react";
 import type { Ride, TransportType } from "@/lib/types";
 import {
@@ -231,7 +231,7 @@ export function RideCard({
         {ride.driver && (
           <div className="border-t pt-4 mt-4 space-y-3">
             <div className="flex items-center gap-3">
-              <SteeringWheel className="h-5 w-5 text-muted-foreground" />
+              <UserRound className="h-5 w-5 text-muted-foreground" />
               <p className="font-semibold text-foreground">Your Driver</p>
             </div>
             <div className="flex items-center gap-3 pl-8">
