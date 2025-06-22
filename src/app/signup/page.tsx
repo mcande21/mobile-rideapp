@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRideStore } from "@/lib/store";
-import type { UserRole } from "@/lib/types";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -16,7 +15,6 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { UserPlus, Car, Loader2 } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -28,7 +26,6 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState<UserRole>("user");
   const [error, setError] = useState<string | null>(null);
   const [isSigningUp, setIsSigningUp] = useState(false);
 
@@ -51,7 +48,7 @@ export default function SignUpPage() {
     setError(null);
     setIsSigningUp(true);
     try {
-      await signUp(name, email, password, role);
+      await signUp(name, email, password);
     } catch (err: any) {
       if (err.code === "auth/email-already-in-use") {
         setError("This email is already in use.");
@@ -128,27 +125,6 @@ export default function SignUpPage() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 required
               />
-            </div>
-            <div className="space-y-2">
-              <Label>I am a...</Label>
-              <RadioGroup
-                className="flex space-x-4 pt-1"
-                onValueChange={(value) => setRole(value as UserRole)}
-                value={role}
-              >
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="user" id="user" />
-                  <Label htmlFor="user" className="font-normal">
-                    User
-                  </Label>
-                </div>
-                <div className="flex items-center space-x-2">
-                  <RadioGroupItem value="driver" id="driver" />
-                  <Label htmlFor="driver" className="font-normal">
-                    Driver
-                  </Label>
-                </div>
-              </RadioGroup>
             </div>
             {error && (
               <Alert variant="destructive">
