@@ -80,11 +80,12 @@ export default function SignInPage() {
     setIsSigningIn(true);
     try {
       await login(email, password);
+      // On success, the useEffect will trigger a redirect and this component will unmount.
+      // No need to set isSigningIn back to false.
     } catch (err: any) {
       setError("Invalid email or password. Please try again.");
       console.error(err);
-    } finally {
-      setIsSigningIn(false);
+      setIsSigningIn(false); // Only set back to false on error.
     }
   };
 
