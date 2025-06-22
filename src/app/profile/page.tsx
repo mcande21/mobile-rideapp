@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -53,6 +52,11 @@ export default function ProfilePage() {
         title: "Profile Updated",
         description: "Your information has been saved successfully.",
       });
+      if (currentUserProfile?.role === "driver") {
+        router.push("/driver");
+      } else {
+        router.push("/user");
+      }
     } catch (err) {
       toast({
         title: "Error",
