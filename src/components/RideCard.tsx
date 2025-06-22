@@ -1,4 +1,3 @@
-
 import { useState, type ReactNode } from "react";
 import {
   MapPin,
@@ -41,6 +40,20 @@ const TransportIcon = ({ type }: { type: TransportType | undefined }) => {
   if (type === "train") return <Train className={className} />;
   if (type === "bus") return <Bus className={className} />;
   return null;
+};
+
+const formatDuration = (minutes: number) => {
+  if (!minutes) return "";
+  const hours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  const parts = [];
+  if (hours > 0) {
+    parts.push(`${hours}h`);
+  }
+  if (remainingMinutes > 0) {
+    parts.push(`${remainingMinutes}m`);
+  }
+  return parts.join(" ");
 };
 
 export function RideCard({
@@ -208,7 +221,7 @@ export function RideCard({
                   Est. Duration:
                 </span>
                 <span className="text-muted-foreground ml-2">
-                  {ride.duration} min
+                  {formatDuration(ride.duration)}
                 </span>
               </div>
             </div>

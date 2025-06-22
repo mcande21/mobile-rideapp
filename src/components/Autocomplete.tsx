@@ -41,7 +41,7 @@ export function Autocomplete<T extends FieldValues>({
           if (places && input) {
             const ac = new places.Autocomplete(input, {
               componentRestrictions: { country: "us" },
-              fields: ["formatted_address"],
+              fields: ["formatted_address", "name", "types"],
             });
             setAutocomplete(ac);
           }
@@ -51,17 +51,34 @@ export function Autocomplete<T extends FieldValues>({
           if (autocomplete) {
             const listener = autocomplete.addListener("place_changed", () => {
               const place = autocomplete.getPlace();
-              if (place.formatted_address) {
-                field.onChange(
-                  place.formatted_address as PathValue<T, Path<T>>
-                );
+              let address = place.formatted_address;
+              if (
+                place.types?.some(
+                  (t) =>
+                    t === "airport" ||
+                    t === "train_station" ||
+                    t === "bus_station"
+                ) &&
+                place.name
+              ) {
+                address = place.name;
+              }
+
+              if (address) {
+                field.onChange(address as PathValue<T, Path<T>>);
               }
             });
             return () => {
               google.maps.event.clearInstanceListeners(autocomplete);
             };
           }
-        }, [autocomplete, field]);
+        }, [autocomplete, field.onChange]);
+
+        useEffect(() => {
+          if (input && field.value !== input.value) {
+            input.value = field.value as string;
+          }
+        }, [input, field.value]);
 
         return (
           <div className="space-y-2">
@@ -70,8 +87,8 @@ export function Autocomplete<T extends FieldValues>({
               id={name}
               placeholder={placeholder}
               ref={setInput}
-              onChange={field.onChange}
-              value={field.value}
+              onChange={(e) => field.onChange(e.target.value)}
+              defaultValue={field.value}
             />
           </div>
         );
