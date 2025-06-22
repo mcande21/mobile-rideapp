@@ -26,4 +26,5 @@ export interface Ride {
   transportType?: TransportType;
   transportNumber?: string;
   direction?: Direction;
+  duration?: number; // Estimated duration in minutes
 }

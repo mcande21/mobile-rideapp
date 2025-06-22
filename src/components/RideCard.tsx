@@ -8,6 +8,7 @@ import {
   Plane,
   Train,
   Bus,
+  Timer,
 } from "lucide-react";
 import type { Ride, TransportType } from "@/lib/types";
 import {
@@ -123,6 +124,19 @@ export function RideCard({ ride, children }: RideCardProps) {
                 </div>
               </div>
             </>
+          )}
+          {ride.duration && (
+            <div className="flex items-center gap-3 text-sm">
+              <Timer className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <span className="font-semibold text-foreground">
+                  Est. Duration:
+                </span>
+                <span className="text-muted-foreground ml-2">
+                  {ride.duration} min
+                </span>
+              </div>
+            </div>
           )}
           {ride.transportType && ride.transportNumber && (
             <div className="flex items-start gap-3 text-sm">

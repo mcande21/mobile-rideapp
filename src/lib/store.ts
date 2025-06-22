@@ -25,6 +25,7 @@ import {
   orderBy,
 } from "firebase/firestore";
 import { seedUsers } from "./mock-data";
+import { getRideDetails } from "@/ai/flows/get-ride-details-flow";
 
 interface RideState {
   rides: Ride[];
@@ -107,6 +108,9 @@ export const useRideStore = create<RideState>((set, get) => ({
   addRide: async (pickup, dropoff, fare, details) => {
     const { currentUserProfile } = get();
     if (!db || !currentUserProfile) throw new Error("User not signed in");
+
+    const rideDetails = await getRideDetails({ pickup, dropoff });
+
     await addDoc(collection(db, "rides"), {
       pickup,
       dropoff,
@@ -114,6 +118,7 @@ export const useRideStore = create<RideState>((set, get) => ({
       status: "pending",
       user: currentUserProfile,
       createdAt: serverTimestamp(),
+      duration: rideDetails.duration,
       ...details,
     });
   },
@@ -175,7 +180,7 @@ export const useRideStore = create<RideState>((set, get) => ({
           uid = tempUser.user.uid;
         } else {
           console.error("Error creating user during seeding:", error);
-          if (error.code === 'auth/invalid-credential') {
+          if (error.code === 'auth/invalid-credential' || error.code === 'auth/configuration-not-found') {
             throw new Error(`Authentication failed for ${userData.email}. Please ensure your Firebase configuration in .env.local is correct and points to the right project.`);
           }
           throw new Error(
@@ -220,6 +225,7 @@ export const useRideStore = create<RideState>((set, get) => ({
         transportType: "flight" as const,
         transportNumber: "UA-123",
         direction: "departure" as const,
+        duration: 45,
       },
       {
         pickup: "Anytown Grand Central Station",
@@ -233,6 +239,7 @@ export const useRideStore = create<RideState>((set, get) => ({
         transportType: "train" as const,
         transportNumber: "Amtrak 54",
         direction: "arrival" as const,
+        duration: 25,
       },
       {
         pickup: "210 Elm St, Anytown, USA",
@@ -246,6 +253,7 @@ export const useRideStore = create<RideState>((set, get) => ({
         transportType: "flight" as const,
         transportNumber: "DL-456",
         direction: "departure" as const,
+        duration: 35,
       },
     ];
 
