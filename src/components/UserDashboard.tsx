@@ -28,7 +28,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Calendar } from "./ui/calendar";
 import { Label } from "./ui/label";
-import { Switch } from "./ui/switch";
+import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -222,20 +222,28 @@ export function UserDashboard() {
               <div className="space-y-2">
                 <Label>Transport Details (Optional)</Label>
                 <div className="p-4 border rounded-lg space-y-4">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="direction-switch" className="flex flex-col">
-                      <span>Direction</span>
-                      <span className="font-normal text-muted-foreground capitalize text-sm">
-                        {direction}
-                      </span>
-                    </Label>
-                    <Switch
-                      id="direction-switch"
-                      checked={direction === "arrival"}
-                      onCheckedChange={(checked) =>
-                        setDirection(checked ? "arrival" : "departure")
+                  <div className="space-y-2">
+                    <Label>Direction</Label>
+                    <RadioGroup
+                      className="flex space-x-4"
+                      onValueChange={(value) =>
+                        setDirection(value as Direction)
                       }
-                    />
+                      value={direction}
+                    >
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="departure" id="departure" />
+                        <Label htmlFor="departure" className="font-normal">
+                          Departure
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <RadioGroupItem value="arrival" id="arrival" />
+                        <Label htmlFor="arrival" className="font-normal">
+                          Arrival
+                        </Label>
+                      </div>
+                    </RadioGroup>
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="transport-type">Transport Type</Label>
