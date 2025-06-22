@@ -1,3 +1,4 @@
+
 "use client";
 
 import { create } from "zustand";
@@ -58,6 +59,11 @@ interface RideState {
   rejectRide: (id: string) => Promise<void>;
   cancelRide: (id: string) => Promise<void>;
   updateRideFare: (id: string, newFare: number) => Promise<void>;
+  updateUserProfile: (data: {
+    name: string;
+    phoneNumber: string;
+    homeAddress: string;
+  }) => Promise<void>;
 }
 
 export const useRideStore = create<RideState>((set, get) => ({
@@ -141,8 +147,10 @@ export const useRideStore = create<RideState>((set, get) => ({
       name: currentUserProfile.name,
       avatarUrl: currentUserProfile.avatarUrl,
       role: currentUserProfile.role,
-      ...(currentUserProfile.phoneNumber && { phoneNumber: currentUserProfile.phoneNumber }),
-      ...(currentUserProfile.homeAddress && { homeAddress: currentUserProfile.homeAddress }),
+      phoneNumber: currentUserProfile.phoneNumber,
+      ...(currentUserProfile.homeAddress && {
+        homeAddress: currentUserProfile.homeAddress,
+      }),
     };
 
     await addDoc(collection(db, "rides"), {
@@ -175,5 +183,19 @@ export const useRideStore = create<RideState>((set, get) => ({
     if (!db) throw new Error("Firebase not configured");
     const rideDocRef = doc(db, "rides", id);
     await updateDoc(rideDocRef, { fare: newFare });
+  },
+  updateUserProfile: async (data) => {
+    const { currentUser, currentUserProfile } = get();
+    if (!db || !currentUser) throw new Error("User not signed in");
+
+    const userDocRef = doc(db, "users", currentUser.uid);
+    await updateDoc(userDocRef, data);
+
+    set({
+      currentUserProfile: {
+        ...currentUserProfile!,
+        ...data,
+      },
+    });
   },
 }));

@@ -1,3 +1,4 @@
+
 export type RideStatus = "pending" | "accepted" | "cancelled" | "completed";
 export type UserRole = "user" | "driver";
 export type TransportType = "flight" | "train" | "bus";
@@ -8,7 +9,7 @@ export interface User {
   name: string;
   avatarUrl: string;
   role: UserRole;
-  phoneNumber?: string;
+  phoneNumber: string;
   homeAddress?: string;
 }
 
