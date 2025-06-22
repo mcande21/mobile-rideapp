@@ -27,7 +27,6 @@ import {
   setDoc,
 } from "firebase/firestore";
 import { seedUsers } from "./mock-data";
-import { getRideDetails } from "@/ai/flows/get-ride-details-flow";
 
 interface RideState {
   rides: Ride[];
@@ -140,14 +139,14 @@ export const useRideStore = create<RideState>((set, get) => ({
     const { currentUserProfile } = get();
     if (!db || !currentUserProfile) throw new Error("User not signed in");
 
-    const rideDetails = await getRideDetails({ pickup, dropoff });
-
     const userPayload = {
       id: currentUserProfile.id,
       name: currentUserProfile.name,
       avatarUrl: currentUserProfile.avatarUrl,
       role: currentUserProfile.role,
-      phoneNumber: currentUserProfile.phoneNumber,
+      ...(currentUserProfile.phoneNumber && {
+        phoneNumber: currentUserProfile.phoneNumber,
+      }),
       ...(currentUserProfile.homeAddress && {
         homeAddress: currentUserProfile.homeAddress,
       }),
@@ -160,7 +159,7 @@ export const useRideStore = create<RideState>((set, get) => ({
       status: "pending",
       user: userPayload,
       createdAt: serverTimestamp(),
-      duration: rideDetails.duration,
+      duration: 60,
       ...details,
     });
   },

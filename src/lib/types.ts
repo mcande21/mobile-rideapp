@@ -9,7 +9,7 @@ export interface User {
   name: string;
   avatarUrl: string;
   role: UserRole;
-  phoneNumber: string;
+  phoneNumber?: string;
   homeAddress?: string;
 }
 
@@ -29,5 +29,5 @@ export interface Ride {
   transportType?: TransportType;
   transportNumber?: string;
   direction?: Direction;
-  duration?: number; // Estimated duration in minutes
+  duration: number; // Estimated duration in minutes
 }
