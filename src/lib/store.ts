@@ -114,8 +114,11 @@ export const useRideStore = create<RideState>((set, get) => ({
     await updateDoc(rideDocRef, { status: "cancelled" });
   },
   seedDatabase: async () => {
-    if (!isConfigured || !auth || !db) {
-      throw new Error("Firebase is not configured. Please ensure your .env.local file is correct and you have enabled Email/Password sign-in in the Firebase console.");
+    if (!isConfigured) {
+      throw new Error("Firebase is not configured. Please add your Firebase project configuration to .env.local.");
+    }
+    if (!auth || !db) {
+       throw new Error("Firebase auth or db object is not available. This is an initialization error.");
     }
     
     const usersCollection = collection(db, "users");
@@ -138,8 +141,8 @@ export const useRideStore = create<RideState>((set, get) => ({
           const tempUser = await signInWithEmailAndPassword(auth, userData.email, userData.password);
           uid = tempUser.user.uid;
         } else {
-          console.error("Error creating user:", error);
-          throw error;
+          console.error("Error creating user during seeding:", error);
+          throw new Error(`Failed to create user ${userData.email}. Firebase error: ${error.message} (Code: ${error.code}). Please check your Firebase project setup and .env.local file.`);
         }
       }
 

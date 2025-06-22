@@ -100,7 +100,7 @@ export default function SignInPage() {
       console.error(err);
       toast({
         title: "Seeding Failed",
-        description: err.message || "Could not seed the database.",
+        description: err.message || "Could not seed the database. Check your Firebase setup and browser console for more details.",
         variant: "destructive",
       });
     } finally {
