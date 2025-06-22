@@ -136,12 +136,21 @@ export const useRideStore = create<RideState>((set, get) => ({
 
     const rideDetails = await getRideDetails({ pickup, dropoff });
 
+    const userPayload = {
+      id: currentUserProfile.id,
+      name: currentUserProfile.name,
+      avatarUrl: currentUserProfile.avatarUrl,
+      role: currentUserProfile.role,
+      phoneNumber: currentUserProfile.phoneNumber,
+      ...(currentUserProfile.homeAddress && { homeAddress: currentUserProfile.homeAddress }),
+    };
+
     await addDoc(collection(db, "rides"), {
       pickup,
       dropoff,
       fare,
       status: "pending",
-      user: currentUserProfile,
+      user: userPayload,
       createdAt: serverTimestamp(),
       duration: rideDetails.duration,
       ...details,
