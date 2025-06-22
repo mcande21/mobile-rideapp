@@ -7,18 +7,20 @@ import { UserDashboard } from "@/components/UserDashboard";
 import { Loader2 } from 'lucide-react';
 
 export default function UserPage() {
-  const { currentUser } = useRideStore();
+  const { currentUserProfile, loading } = useRideStore();
   const router = useRouter();
 
   useEffect(() => {
-    if (!currentUser) {
-      router.replace('/');
-    } else if (currentUser.role !== 'user') {
-      router.replace('/driver');
+    if (!loading) {
+      if (!currentUserProfile) {
+        router.replace('/');
+      } else if (currentUserProfile.role !== 'user') {
+        router.replace('/driver');
+      }
     }
-  }, [currentUser, router]);
+  }, [currentUserProfile, loading, router]);
 
-  if (!currentUser || currentUser.role !== 'user') {
+  if (loading || !currentUserProfile || currentUserProfile.role !== 'user') {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />

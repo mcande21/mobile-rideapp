@@ -28,7 +28,7 @@ import {
 import { Car, Loader2 } from "lucide-react";
 
 export function UserDashboard() {
-  const { rides, addRide, cancelRide, currentUser } = useRideStore();
+  const { rides, addRide, cancelRide, currentUserProfile } = useRideStore();
   const { toast } = useToast();
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
@@ -47,33 +47,48 @@ export function UserDashboard() {
     return 0;
   }, [pickup, dropoff]);
 
-  const handleRequestRide = (e: React.FormEvent) => {
+  const handleRequestRide = async (e: React.FormEvent) => {
     e.preventDefault();
     if (fare > 0) {
       setIsSubmitting(true);
-      setTimeout(() => {
-        addRide(pickup, dropoff, fare);
+      try {
+        await addRide(pickup, dropoff, fare);
         toast({
           title: "Ride Requested!",
           description: "We are finding a driver for you.",
         });
         setPickup("");
         setDropoff("");
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Could not request the ride.",
+          variant: "destructive",
+        });
+      } finally {
         setIsSubmitting(false);
-      }, 1000);
+      }
     }
   };
 
-  const handleCancelRide = (id: string) => {
-    cancelRide(id);
-    toast({
-      title: "Ride Cancelled",
-      description: "Your ride has been successfully cancelled.",
-      variant: "destructive",
-    });
+  const handleCancelRide = async (id: string) => {
+    try {
+      await cancelRide(id);
+      toast({
+        title: "Ride Cancelled",
+        description: "Your ride has been successfully cancelled.",
+        variant: "destructive",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Could not cancel the ride.",
+        variant: "destructive",
+      });
+    }
   };
 
-  const userRides = rides.filter((ride) => ride.user.id === currentUser?.id);
+  const userRides = rides.filter((ride) => ride.user.id === currentUserProfile?.id);
   const pendingRides = userRides.filter((ride) => ride.status === "pending");
   const scheduledRides = userRides.filter(
     (ride) => ride.status === "accepted"

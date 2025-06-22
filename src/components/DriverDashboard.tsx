@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "./ui/separator";
 
 export function DriverDashboard() {
-  const { rides, acceptRide, rejectRide } = useRideStore();
+  const { rides, acceptRide, rejectRide, currentUserProfile } = useRideStore();
   const { toast } = useToast();
   
   const [isClient, setIsClient] = useState(false);
@@ -17,20 +17,36 @@ export function DriverDashboard() {
     setIsClient(true);
   }, []);
 
-  const handleAcceptRide = (id: string) => {
-    acceptRide(id);
-    toast({
-      title: "Ride Accepted!",
-      description: "The ride has been added to your schedule.",
-    });
+  const handleAcceptRide = async (id: string) => {
+    try {
+      await acceptRide(id);
+      toast({
+        title: "Ride Accepted!",
+        description: "The ride has been added to your schedule.",
+      });
+    } catch (error) {
+       toast({
+        title: "Error",
+        description: "Could not accept the ride.",
+        variant: "destructive"
+      });
+    }
   };
 
-  const handleRejectRide = (id: string) => {
-    rejectRide(id);
-    toast({
-      title: "Ride Rejected",
-      variant: "destructive",
-    });
+  const handleRejectRide = async (id: string) => {
+    try {
+      await rejectRide(id);
+      toast({
+        title: "Ride Rejected",
+        description: "The ride request has been removed.",
+      });
+    } catch (error) {
+       toast({
+        title: "Error",
+        description: "Could not reject the ride.",
+        variant: "destructive"
+      });
+    }
   };
 
   const newRequests = rides.filter((ride) => ride.status === "pending");

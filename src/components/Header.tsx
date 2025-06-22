@@ -16,11 +16,11 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 export function Header() {
-  const { currentUser, logout } = useRideStore();
+  const { currentUserProfile, logout } = useRideStore();
   const router = useRouter();
 
-  const handleLogout = () => {
-    logout();
+  const handleLogout = async () => {
+    await logout();
     router.push("/");
   };
 
@@ -29,8 +29,8 @@ export function Header() {
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
         <Link
           href={
-            currentUser
-              ? currentUser.role === "driver"
+            currentUserProfile
+              ? currentUserProfile.role === "driver"
                 ? "/driver"
                 : "/user"
               : "/"
@@ -42,7 +42,7 @@ export function Header() {
           </div>
           <h1 className="text-xl font-bold text-foreground">Ride Queue</h1>
         </Link>
-        {currentUser && (
+        {currentUserProfile && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
@@ -51,11 +51,11 @@ export function Header() {
               >
                 <Avatar>
                   <AvatarImage
-                    src={currentUser.avatarUrl}
-                    alt={currentUser.name}
+                    src={currentUserProfile.avatarUrl}
+                    alt={currentUserProfile.name}
                   />
                   <AvatarFallback>
-                    {currentUser.name
+                    {currentUserProfile.name
                       .split(" ")
                       .map((n) => n[0])
                       .join("")}
@@ -67,10 +67,10 @@ export function Header() {
               <DropdownMenuLabel className="font-normal">
                 <div className="flex flex-col space-y-1">
                   <p className="text-sm font-medium leading-none">
-                    {currentUser.name}
+                    {currentUserProfile.name}
                   </p>
                   <p className="text-xs leading-none text-muted-foreground capitalize">
-                    {currentUser.role}
+                    {currentUserProfile.role}
                   </p>
                 </div>
               </DropdownMenuLabel>
