@@ -139,18 +139,15 @@ export const useRideStore = create<RideState>((set, get) => ({
     const { currentUserProfile } = get();
     if (!db || !currentUserProfile) throw new Error("User not signed in");
 
-    const userPayload = {
+    const userPayload: Partial<User> = {
       id: currentUserProfile.id,
       name: currentUserProfile.name,
       avatarUrl: currentUserProfile.avatarUrl,
       role: currentUserProfile.role,
-      ...(currentUserProfile.phoneNumber && {
-        phoneNumber: currentUserProfile.phoneNumber,
-      }),
-      ...(currentUserProfile.homeAddress && {
-        homeAddress: currentUserProfile.homeAddress,
-      }),
     };
+    if (currentUserProfile.phoneNumber) {
+      userPayload.phoneNumber = currentUserProfile.phoneNumber;
+    }
 
     await addDoc(collection(db, "rides"), {
       pickup,
@@ -164,9 +161,26 @@ export const useRideStore = create<RideState>((set, get) => ({
     });
   },
   acceptRide: async (id: string) => {
-    if (!db) throw new Error("Firebase not configured");
+    const { currentUserProfile } = get();
+    if (!db || !currentUserProfile || currentUserProfile.role !== "driver") {
+      throw new Error("Driver not signed in or invalid permissions.");
+    }
     const rideDocRef = doc(db, "rides", id);
-    await updateDoc(rideDocRef, { status: "accepted" });
+
+    const driverPayload: Partial<User> = {
+      id: currentUserProfile.id,
+      name: currentUserProfile.name,
+      avatarUrl: currentUserProfile.avatarUrl,
+      role: currentUserProfile.role,
+    };
+    if (currentUserProfile.phoneNumber) {
+      driverPayload.phoneNumber = currentUserProfile.phoneNumber;
+    }
+
+    await updateDoc(rideDocRef, {
+      status: "accepted",
+      driver: driverPayload,
+    });
   },
   rejectRide: async (id: string) => {
     if (!db) throw new Error("Firebase not configured");

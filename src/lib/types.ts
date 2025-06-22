@@ -20,6 +20,7 @@ export interface Ride {
   fare: number;
   status: RideStatus;
   user: User; // Denormalized user data
+  driver?: User; // Denormalized driver data
   createdAt: {
     // The time the request was made
     seconds: number;

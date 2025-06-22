@@ -1,3 +1,4 @@
+
 import { useState, type ReactNode } from "react";
 import {
   MapPin,
@@ -11,6 +12,7 @@ import {
   Edit,
   Check,
   Phone,
+  SteeringWheel,
 } from "lucide-react";
 import type { Ride, TransportType } from "@/lib/types";
 import {
@@ -226,6 +228,37 @@ export function RideCard({
             </div>
           )}
         </div>
+        {ride.driver && (
+          <div className="border-t pt-4 mt-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <SteeringWheel className="h-5 w-5 text-muted-foreground" />
+              <p className="font-semibold text-foreground">Your Driver</p>
+            </div>
+            <div className="flex items-center gap-3 pl-8">
+              <Avatar className="h-9 w-9">
+                <AvatarImage
+                  src={ride.driver.avatarUrl}
+                  alt={ride.driver.name}
+                  data-ai-hint="driver person"
+                />
+                <AvatarFallback>
+                  {ride.driver.name
+                    .split(" ")
+                    .map((n) => n[0])
+                    .join("")}
+                </AvatarFallback>
+              </Avatar>
+              <div>
+                <p className="font-medium text-sm">{ride.driver.name}</p>
+                {ride.driver.phoneNumber && (
+                  <p className="text-muted-foreground text-sm">
+                    {ride.driver.phoneNumber}
+                  </p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
       </CardContent>
       {children && (
         <CardFooter className="flex justify-end gap-2">{children}</CardFooter>
