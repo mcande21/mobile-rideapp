@@ -1,5 +1,7 @@
-export type RideStatus = 'pending' | 'accepted' | 'cancelled' | 'completed';
-export type UserRole = 'user' | 'driver';
+export type RideStatus = "pending" | "accepted" | "cancelled" | "completed";
+export type UserRole = "user" | "driver";
+export type TransportType = "flight" | "train" | "bus";
+export type Direction = "arrival" | "departure";
 
 export interface User {
   id: string; // Corresponds to Firebase Auth UID
@@ -16,7 +18,12 @@ export interface Ride {
   status: RideStatus;
   user: User; // Denormalized user data
   createdAt: {
+    // The time the request was made
     seconds: number;
     nanoseconds: number;
-  }
+  };
+  dateTime: string; // ISO string for the ride's scheduled date and time
+  transportType?: TransportType;
+  transportNumber?: string;
+  direction?: Direction;
 }

@@ -1,7 +1,15 @@
 import type { ReactNode } from "react";
-import { MapPin, CircleDollarSign, Clock, User } from "lucide-react";
-import Image from "next/image";
-import type { Ride } from "@/lib/types";
+import {
+  MapPin,
+  CircleDollarSign,
+  User,
+  CalendarDays,
+  Clock,
+  Plane,
+  Train,
+  Bus,
+} from "lucide-react";
+import type { Ride, TransportType } from "@/lib/types";
 import {
   Card,
   CardContent,
@@ -11,11 +19,20 @@ import {
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { format } from "date-fns";
 
 interface RideCardProps {
   ride: Ride;
   children?: ReactNode;
 }
+
+const TransportIcon = ({ type }: { type: TransportType | undefined }) => {
+  const className = "h-5 w-5 text-muted-foreground";
+  if (type === "flight") return <Plane className={className} />;
+  if (type === "train") return <Train className={className} />;
+  if (type === "bus") return <Bus className={className} />;
+  return null;
+};
 
 export function RideCard({ ride, children }: RideCardProps) {
   const getStatusVariant = (status: Ride["status"]) => {
@@ -34,7 +51,7 @@ export function RideCard({ ride, children }: RideCardProps) {
   };
 
   return (
-    <Card className="w-full transition-all hover:shadow-md">
+    <Card className="w-full transition-all hover:shadow-md flex flex-col">
       <CardHeader>
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
@@ -60,7 +77,7 @@ export function RideCard({ ride, children }: RideCardProps) {
           </Badge>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 flex-1">
         <div className="flex items-start gap-3 text-sm">
           <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
           <div>
@@ -83,6 +100,40 @@ export function RideCard({ ride, children }: RideCardProps) {
               ${ride.fare.toFixed(2)}
             </span>
           </div>
+        </div>
+        <div className="border-t pt-4 mt-4 space-y-4">
+          <div className="flex items-center gap-3 text-sm">
+            <CalendarDays className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <span className="font-semibold text-foreground">Date:</span>
+              <span className="text-muted-foreground ml-2">
+                {format(new Date(ride.dateTime), "PPP")}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-3 text-sm">
+            <Clock className="h-5 w-5 text-muted-foreground" />
+            <div>
+              <span className="font-semibold text-foreground">Time:</span>
+              <span className="text-muted-foreground ml-2">
+                {format(new Date(ride.dateTime), "p")}
+              </span>
+            </div>
+          </div>
+          {ride.transportType && ride.transportNumber && (
+            <div className="flex items-start gap-3 text-sm">
+              <TransportIcon type={ride.transportType} />
+              <div>
+                <span className="font-semibold text-foreground capitalize">
+                  {ride.transportType}:
+                </span>
+                <p className="text-muted-foreground">
+                  {ride.transportNumber} (
+                  <span className="capitalize">{ride.direction}</span>)
+                </p>
+              </div>
+            </div>
+          )}
         </div>
       </CardContent>
       {children && (

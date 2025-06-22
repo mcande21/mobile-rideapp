@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { Ride, User } from "./types";
+import type { Ride, User, TransportType, Direction } from "./types";
 import { auth, db, isConfigured } from "./firebase";
 import {
   onAuthStateChanged,
@@ -22,7 +22,7 @@ import {
   query,
   getDocs,
   serverTimestamp,
-  orderBy
+  orderBy,
 } from "firebase/firestore";
 import { seedUsers } from "./mock-data";
 
@@ -34,7 +34,17 @@ interface RideState {
   initAuth: () => () => void;
   login: (email: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  addRide: (pickup: string, dropoff: string, fare: number) => Promise<void>;
+  addRide: (
+    pickup: string,
+    dropoff: string,
+    fare: number,
+    details: {
+      dateTime: string;
+      transportType?: TransportType | "";
+      transportNumber?: string;
+      direction?: Direction;
+    }
+  ) => Promise<void>;
   acceptRide: (id: string) => Promise<void>;
   rejectRide: (id: string) => Promise<void>;
   cancelRide: (id: string) => Promise<void>;
@@ -51,29 +61,37 @@ export const useRideStore = create<RideState>((set, get) => ({
       set({ loading: false });
       return () => {};
     }
-    
+
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       set({ currentUser: user });
       if (user) {
         const userDocRef = doc(db!, "users", user.uid);
         const userDoc = await getDoc(userDocRef);
         if (userDoc.exists()) {
-          set({ currentUserProfile: { id: user.uid, ...userDoc.data() } as User });
+          set({
+            currentUserProfile: { id: user.uid, ...userDoc.data() } as User,
+          });
         } else {
           set({ currentUserProfile: null });
         }
-        
+
         const ridesCollection = collection(db!, "rides");
         const q = query(ridesCollection, orderBy("createdAt", "desc"));
         const unsubRides = onSnapshot(q, (snapshot) => {
-          const rides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ride));
+          const rides = snapshot.docs.map(
+            (doc) => ({ id: doc.id, ...doc.data() } as Ride)
+          );
           set({ rides });
         });
         set({ loading: false });
         return unsubRides;
-
       } else {
-        set({ currentUser: null, currentUserProfile: null, rides: [], loading: false });
+        set({
+          currentUser: null,
+          currentUserProfile: null,
+          rides: [],
+          loading: false,
+        });
       }
     });
     return unsubscribe;
@@ -86,7 +104,7 @@ export const useRideStore = create<RideState>((set, get) => ({
     if (!auth) throw new Error("Firebase not configured");
     await signOut(auth);
   },
-  addRide: async (pickup, dropoff, fare) => {
+  addRide: async (pickup, dropoff, fare, details) => {
     const { currentUserProfile } = get();
     if (!db || !currentUserProfile) throw new Error("User not signed in");
     await addDoc(collection(db, "rides"), {
@@ -96,6 +114,7 @@ export const useRideStore = create<RideState>((set, get) => ({
       status: "pending",
       user: currentUserProfile,
       createdAt: serverTimestamp(),
+      ...details,
     });
   },
   acceptRide: async (id: string) => {
@@ -115,12 +134,16 @@ export const useRideStore = create<RideState>((set, get) => ({
   },
   seedDatabase: async () => {
     if (!isConfigured) {
-      throw new Error("Firebase is not configured. Please add your Firebase project configuration to .env.local.");
+      throw new Error(
+        "Firebase is not configured. Please add your Firebase project configuration to .env.local."
+      );
     }
     if (!auth || !db) {
-       throw new Error("Firebase auth or db object is not available. This is an initialization error.");
+      throw new Error(
+        "Firebase auth or db object is not available. This is an initialization error."
+      );
     }
-    
+
     const usersCollection = collection(db, "users");
     const existingUsersSnapshot = await getDocs(usersCollection);
     if (!existingUsersSnapshot.empty) {
@@ -133,21 +156,36 @@ export const useRideStore = create<RideState>((set, get) => ({
     for (const userData of seedUsers) {
       let uid: string | undefined;
       try {
-        const userCredential = await createUserWithEmailAndPassword(auth, userData.email, userData.password);
+        const userCredential = await createUserWithEmailAndPassword(
+          auth,
+          userData.email,
+          userData.password
+        );
         uid = userCredential.user.uid;
       } catch (error: any) {
-        if (error.code === 'auth/email-already-in-use') {
-          console.warn(`User ${userData.email} already exists in Auth. Signing in to get UID.`);
-          const tempUser = await signInWithEmailAndPassword(auth, userData.email, userData.password);
+        if (error.code === "auth/email-already-in-use") {
+          console.warn(
+            `User ${userData.email} already exists in Auth. Signing in to get UID.`
+          );
+          const tempUser = await signInWithEmailAndPassword(
+            auth,
+            userData.email,
+            userData.password
+          );
           uid = tempUser.user.uid;
         } else {
           console.error("Error creating user during seeding:", error);
-          throw new Error(`Failed to create user ${userData.email}. Firebase error: ${error.message} (Code: ${error.code}). Please check your Firebase project setup and .env.local file.`);
+          if (error.code === 'auth/invalid-credential') {
+            throw new Error(`Authentication failed for ${userData.email}. Please ensure your Firebase configuration in .env.local is correct and points to the right project.`);
+          }
+          throw new Error(
+            `Failed to create user ${userData.email}. Firebase error: ${error.message} (Code: ${error.code}). Please check your Firebase project setup and .env.local file.`
+          );
         }
       }
 
       if (!uid) throw new Error(`Failed to get UID for ${userData.email}`);
-      
+
       const userProfile: User = {
         id: uid,
         name: userData.name,
@@ -165,21 +203,57 @@ export const useRideStore = create<RideState>((set, get) => ({
     if (auth.currentUser) {
       await signOut(auth);
     }
-    
-    const alice = createdUsers.find(u => u.name === 'Alice Johnson')!;
-    const bob = createdUsers.find(u => u.name === 'Bob Williams')!;
+
+    const alice = createdUsers.find((u) => u.name === "Alice Johnson")!;
+    const bob = createdUsers.find((u) => u.name === "Bob Williams")!;
 
     const ridesData = [
-      { pickup: "123 Main St, Anytown, USA", dropoff: "456 Oak Ave, Anytown, USA", fare: 25.5, status: "pending", user: alice },
-      { pickup: "789 Pine Ln, Anytown, USA", dropoff: "101 Maple Dr, Anytown, USA", fare: 18.75, status: "pending", user: bob },
-      { pickup: "210 Elm St, Anytown, USA", dropoff: "321 Birch Rd, Anytown, USA", fare: 32.0, status: "accepted", user: alice },
+      {
+        pickup: "123 Main St, Anytown, USA",
+        dropoff: "Anytown International Airport",
+        fare: 45.5,
+        status: "pending" as const,
+        user: alice,
+        dateTime: new Date(
+          Date.now() + 2 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+        transportType: "flight" as const,
+        transportNumber: "UA-123",
+        direction: "departure" as const,
+      },
+      {
+        pickup: "Anytown Grand Central Station",
+        dropoff: "789 Pine Ln, Anytown, USA",
+        fare: 22.0,
+        status: "pending" as const,
+        user: bob,
+        dateTime: new Date(
+          Date.now() + 3 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+        transportType: "train" as const,
+        transportNumber: "Amtrak 54",
+        direction: "arrival" as const,
+      },
+      {
+        pickup: "210 Elm St, Anytown, USA",
+        dropoff: "Anytown International Airport",
+        fare: 35.0,
+        status: "accepted" as const,
+        user: alice,
+        dateTime: new Date(
+          Date.now() + 5 * 24 * 60 * 60 * 1000
+        ).toISOString(),
+        transportType: "flight" as const,
+        transportNumber: "DL-456",
+        direction: "departure" as const,
+      },
     ];
 
     for (const rideData of ridesData) {
-        const rideDocRef = doc(collection(db, "rides"));
-        batch.set(rideDocRef, { ...rideData, createdAt: serverTimestamp() });
+      const rideDocRef = doc(collection(db, "rides"));
+      batch.set(rideDocRef, { ...rideData, createdAt: serverTimestamp() });
     }
-    
+
     await batch.commit();
     return "Database seeded successfully!";
   },

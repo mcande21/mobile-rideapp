@@ -25,14 +25,42 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
-import { Car, Loader2 } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
+import { Calendar } from "./ui/calendar";
+import { Label } from "./ui/label";
+import { Switch } from "./ui/switch";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "./ui/select";
+import { cn } from "@/lib/utils";
+import { format } from "date-fns";
+import {
+  Car,
+  Loader2,
+  Calendar as CalendarIcon,
+  Plane,
+  Train,
+  Bus,
+} from "lucide-react";
+import type { Direction, TransportType } from "@/lib/types";
 
 export function UserDashboard() {
   const { rides, addRide, cancelRide, currentUserProfile } = useRideStore();
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Form state
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [date, setDate] = useState<Date | undefined>();
+  const [time, setTime] = useState("");
+  const [direction, setDirection] = useState<Direction>("departure");
+  const [transportType, setTransportType] = useState<TransportType | "">("");
+  const [transportNumber, setTransportNumber] = useState("");
 
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
@@ -49,16 +77,33 @@ export function UserDashboard() {
 
   const handleRequestRide = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (fare > 0) {
+    if (fare > 0 && date && time) {
       setIsSubmitting(true);
       try {
-        await addRide(pickup, dropoff, fare);
+        const [hours, minutes] = time.split(":").map(Number);
+        const combinedDateTime = new Date(date);
+        combinedDateTime.setHours(hours, minutes, 0, 0);
+
+        await addRide(pickup, dropoff, fare, {
+          dateTime: combinedDateTime.toISOString(),
+          direction,
+          ...(transportType && { transportType }),
+          ...(transportNumber && { transportNumber }),
+        });
+
         toast({
           title: "Ride Requested!",
           description: "We are finding a driver for you.",
         });
+        
+        // Reset form
         setPickup("");
         setDropoff("");
+        setDate(undefined);
+        setTime("");
+        setDirection("departure");
+        setTransportType("");
+        setTransportNumber("");
       } catch (error) {
         toast({
           title: "Error",
@@ -88,7 +133,9 @@ export function UserDashboard() {
     }
   };
 
-  const userRides = rides.filter((ride) => ride.user.id === currentUserProfile?.id);
+  const userRides = rides.filter(
+    (ride) => ride.user.id === currentUserProfile?.id
+  );
   const pendingRides = userRides.filter((ride) => ride.status === "pending");
   const scheduledRides = userRides.filter(
     (ride) => ride.status === "accepted"
@@ -114,18 +161,130 @@ export function UserDashboard() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleRequestRide} className="space-y-4">
-              <Input
-                placeholder="Pickup Location"
-                value={pickup}
-                onChange={(e) => setPickup(e.target.value)}
-                required
-              />
-              <Input
-                placeholder="Drop-off Location"
-                value={dropoff}
-                onChange={(e) => setDropoff(e.target.value)}
-                required
-              />
+              <div className="space-y-2">
+                <Label htmlFor="pickup">Pickup Location</Label>
+                <Input
+                  id="pickup"
+                  placeholder="e.g., 123 Main St"
+                  value={pickup}
+                  onChange={(e) => setPickup(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="dropoff">Drop-off Location</Label>
+                <Input
+                  id="dropoff"
+                  placeholder="e.g., Anytown Airport"
+                  value={dropoff}
+                  onChange={(e) => setDropoff(e.target.value)}
+                  required
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="date">Date</Label>
+                  <Popover>
+                    <PopoverTrigger asChild>
+                      <Button
+                        id="date"
+                        variant={"outline"}
+                        className={cn(
+                          "w-full justify-start text-left font-normal",
+                          !date && "text-muted-foreground"
+                        )}
+                      >
+                        <CalendarIcon className="mr-2 h-4 w-4" />
+                        {date ? format(date, "PPP") : <span>Pick a date</span>}
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-auto p-0">
+                      <Calendar
+                        mode="single"
+                        selected={date}
+                        onSelect={setDate}
+                        initialFocus
+                      />
+                    </PopoverContent>
+                  </Popover>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="time">Time</Label>
+                  <Input
+                    id="time"
+                    type="time"
+                    value={time}
+                    onChange={(e) => setTime(e.target.value)}
+                    required
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Transport Details (Optional)</Label>
+                <div className="p-4 border rounded-lg space-y-4">
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="direction-switch" className="flex flex-col">
+                      <span>Direction</span>
+                      <span className="font-normal text-muted-foreground capitalize text-sm">
+                        {direction}
+                      </span>
+                    </Label>
+                    <Switch
+                      id="direction-switch"
+                      checked={direction === "arrival"}
+                      onCheckedChange={(checked) =>
+                        setDirection(checked ? "arrival" : "departure")
+                      }
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="transport-type">Transport Type</Label>
+                    <Select
+                      onValueChange={(value) =>
+                        setTransportType(value as TransportType)
+                      }
+                      value={transportType}
+                    >
+                      <SelectTrigger id="transport-type">
+                        <SelectValue placeholder="Select type..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="flight">
+                          <span className="flex items-center gap-2">
+                            <Plane /> Flight
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="train">
+                          <span className="flex items-center gap-2">
+                            <Train /> Train
+                          </span>
+                        </SelectItem>
+                        <SelectItem value="bus">
+                          <span className="flex items-center gap-2">
+                            <Bus /> Bus
+                          </span>
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {transportType && (
+                    <div className="space-y-2">
+                      <Label htmlFor="transport-number">
+                        {transportType.charAt(0).toUpperCase() +
+                          transportType.slice(1)}{" "}
+                        Number
+                      </Label>
+                      <Input
+                        id="transport-number"
+                        placeholder="e.g., UA123"
+                        value={transportNumber}
+                        onChange={(e) => setTransportNumber(e.target.value)}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
               {fare > 0 && (
                 <div className="text-center text-2xl font-bold text-foreground py-2">
                   Estimated Fare: ${fare.toFixed(2)}
@@ -134,7 +293,7 @@ export function UserDashboard() {
               <Button
                 type="submit"
                 className="w-full transition-all"
-                disabled={!fare || isSubmitting}
+                disabled={!fare || !date || !time || isSubmitting}
               >
                 {isSubmitting ? (
                   <Loader2 className="animate-spin" />
@@ -172,7 +331,9 @@ export function UserDashboard() {
                       </AlertDialogHeader>
                       <AlertDialogFooter>
                         <AlertDialogCancel>Keep Ride</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleCancelRide(ride.id)}>
+                        <AlertDialogAction
+                          onClick={() => handleCancelRide(ride.id)}
+                        >
                           Confirm Cancellation
                         </AlertDialogAction>
                       </AlertDialogFooter>
