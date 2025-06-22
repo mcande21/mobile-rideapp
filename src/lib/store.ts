@@ -57,6 +57,7 @@ interface RideState {
   acceptRide: (id: string) => Promise<void>;
   rejectRide: (id: string) => Promise<void>;
   cancelRide: (id: string) => Promise<void>;
+  updateRideFare: (id: string, newFare: number) => Promise<void>;
 }
 
 export const useRideStore = create<RideState>((set, get) => ({
@@ -160,5 +161,10 @@ export const useRideStore = create<RideState>((set, get) => ({
     if (!db) throw new Error("Firebase not configured");
     const rideDocRef = doc(db, "rides", id);
     await updateDoc(rideDocRef, { status: "cancelled" });
+  },
+  updateRideFare: async (id: string, newFare: number) => {
+    if (!db) throw new Error("Firebase not configured");
+    const rideDocRef = doc(db, "rides", id);
+    await updateDoc(rideDocRef, { fare: newFare });
   },
 }));

@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Separator } from "./ui/separator";
 
 export function DriverDashboard() {
-  const { rides, acceptRide, rejectRide, currentUserProfile } = useRideStore();
+  const { rides, acceptRide, rejectRide, updateRideFare } = useRideStore();
   const { toast } = useToast();
   
   const [isClient, setIsClient] = useState(false);
@@ -49,6 +49,22 @@ export function DriverDashboard() {
     }
   };
 
+  const handleUpdateFare = async (id: string, fare: number) => {
+    try {
+      await updateRideFare(id, fare);
+      toast({
+        title: "Fare Updated!",
+        description: "The ride fare has been successfully updated.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Could not update the fare.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const newRequests = rides.filter((ride) => ride.status === "pending");
   const acceptedRides = rides.filter((ride) => ride.status === "accepted");
 
@@ -67,7 +83,11 @@ export function DriverDashboard() {
         {newRequests.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {newRequests.map((ride) => (
-              <RideCard key={ride.id} ride={ride}>
+              <RideCard
+                key={ride.id}
+                ride={ride}
+                onUpdateFare={handleUpdateFare}
+              >
                 <Button
                   variant="outline"
                   size="icon"
@@ -100,7 +120,11 @@ export function DriverDashboard() {
         {acceptedRides.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {acceptedRides.map((ride) => (
-              <RideCard key={ride.id} ride={ride} />
+              <RideCard
+                key={ride.id}
+                ride={ride}
+                onUpdateFare={handleUpdateFare}
+              />
             ))}
           </div>
         ) : (

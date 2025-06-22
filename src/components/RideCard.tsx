@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import {
   MapPin,
   CircleDollarSign,
@@ -9,6 +9,8 @@ import {
   Train,
   Bus,
   Timer,
+  Edit,
+  Check,
 } from "lucide-react";
 import type { Ride, TransportType } from "@/lib/types";
 import {
@@ -21,10 +23,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
+import { Input } from "./ui/input";
+import { Button } from "./ui/button";
 
 interface RideCardProps {
   ride: Ride;
   children?: ReactNode;
+  onUpdateFare?: (rideId: string, fare: number) => void;
 }
 
 const TransportIcon = ({ type }: { type: TransportType | undefined }) => {
@@ -35,7 +40,17 @@ const TransportIcon = ({ type }: { type: TransportType | undefined }) => {
   return null;
 };
 
-export function RideCard({ ride, children }: RideCardProps) {
+export function RideCard({ ride, children, onUpdateFare }: RideCardProps) {
+  const [isEditingFare, setIsEditingFare] = useState(false);
+  const [newFare, setNewFare] = useState(ride.fare);
+
+  const handleSaveFare = () => {
+    if (onUpdateFare) {
+      onUpdateFare(ride.id, newFare);
+      setIsEditingFare(false);
+    }
+  };
+
   const getStatusVariant = (status: Ride["status"]) => {
     switch (status) {
       case "pending":
@@ -95,11 +110,52 @@ export function RideCard({ ride, children }: RideCardProps) {
         </div>
         <div className="flex items-center gap-3 text-sm">
           <CircleDollarSign className="h-5 w-5 text-muted-foreground" />
-          <div>
+          <div className="flex items-center gap-2">
             <span className="font-semibold text-foreground">Fare:</span>
-            <span className="text-muted-foreground ml-2">
-              ${ride.fare.toFixed(2)}
-            </span>
+            {!isEditingFare ? (
+              <>
+                <span className="text-muted-foreground ml-2">
+                  ${ride.fare.toFixed(2)}
+                </span>
+                {onUpdateFare && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    className="h-6 w-6"
+                    onClick={() => {
+                      setNewFare(ride.fare);
+                      setIsEditingFare(true);
+                    }}
+                  >
+                    <Edit className="h-3 w-3" />
+                    <span className="sr-only">Edit Fare</span>
+                  </Button>
+                )}
+              </>
+            ) : (
+              <div className="flex items-center gap-1">
+                <span className="text-muted-foreground ml-2">$</span>
+                <Input
+                  type="number"
+                  value={newFare}
+                  onChange={(e) =>
+                    setNewFare(parseFloat(e.target.value) || 0)
+                  }
+                  className="h-8 w-24"
+                  step="0.01"
+                  min="0"
+                />
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8"
+                  onClick={handleSaveFare}
+                >
+                  <Check className="h-4 w-4" />
+                  <span className="sr-only">Save Fare</span>
+                </Button>
+              </div>
+            )}
           </div>
         </div>
         <div className="border-t pt-4 mt-4 space-y-4">
