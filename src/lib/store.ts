@@ -2,7 +2,7 @@
 
 import { create } from "zustand";
 import type { Ride, User } from "./types";
-import { auth, db } from "./firebase";
+import { auth, db, isConfigured } from "./firebase";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -114,7 +114,9 @@ export const useRideStore = create<RideState>((set, get) => ({
     await updateDoc(rideDocRef, { status: "cancelled" });
   },
   seedDatabase: async () => {
-    if (!auth || !db) throw new Error("Firebase not configured.");
+    if (!isConfigured || !auth || !db) {
+      throw new Error("Firebase is not configured. Please ensure your .env.local file is correct and you have enabled Email/Password sign-in in the Firebase console.");
+    }
     
     const usersCollection = collection(db, "users");
     const existingUsersSnapshot = await getDocs(usersCollection);
