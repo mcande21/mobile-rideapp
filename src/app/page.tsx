@@ -15,9 +15,8 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Car, LogIn, AlertTriangle, Loader2, Database } from "lucide-react";
+import { Car, LogIn, AlertTriangle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { useToast } from "@/hooks/use-toast";
 
 function FirebaseNotConfigured() {
   return (
@@ -54,15 +53,13 @@ function FirebaseNotConfigured() {
 }
 
 export default function SignInPage() {
-  const { login, seedDatabase, currentUserProfile, loading } = useRideStore();
-  const { toast } = useToast();
+  const { login, currentUserProfile, loading } = useRideStore();
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isSigningIn, setIsSigningIn] = useState(false);
-  const [isSeeding, setIsSeeding] = useState(false);
 
   useEffect(() => {
     if (!loading && currentUserProfile) {
@@ -86,26 +83,6 @@ export default function SignInPage() {
       setError("Invalid email or password. Please try again.");
       console.error(err);
       setIsSigningIn(false); // Only set back to false on error.
-    }
-  };
-
-  const handleSeed = async () => {
-    setIsSeeding(true);
-    try {
-      const result = await seedDatabase();
-      toast({
-        title: "Seeding Complete",
-        description: result,
-      });
-    } catch (err: any) {
-      console.error(err);
-      toast({
-        title: "Seeding Failed",
-        description: err.message || "Could not seed the database. Check your Firebase setup and browser console for more details.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSeeding(false);
     }
   };
 
@@ -174,26 +151,6 @@ export default function SignInPage() {
           </CardContent>
         </form>
         <CardFooter className="flex flex-col gap-4 items-start text-sm">
-          <Alert>
-            <AlertTitle className="flex items-center gap-2"><Database/> First-time Setup</AlertTitle>
-            <AlertDescription>
-              <p className="mb-2">
-                Click the button below to seed your database with sample users and rides.
-              </p>
-              <Button
-                variant="secondary"
-                className="w-full"
-                onClick={handleSeed}
-                disabled={isSeeding}
-              >
-                {isSeeding ? (
-                  <Loader2 className="animate-spin" />
-                ) : (
-                  "Seed Database"
-                )}
-              </Button>
-            </AlertDescription>
-          </Alert>
           <div className="text-muted-foreground">
             <p>You can use these test accounts (password: `password123`):</p>
             <ul className="list-disc pl-5 mt-1">
