@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useRideStore } from "@/lib/store";
 import { isConfigured } from "@/lib/firebase";
@@ -77,12 +78,10 @@ export default function SignInPage() {
     setIsSigningIn(true);
     try {
       await login(email, password);
-      // On success, the useEffect will trigger a redirect and this component will unmount.
-      // No need to set isSigningIn back to false.
     } catch (err: any) {
       setError("Invalid email or password. Please try again.");
       console.error(err);
-      setIsSigningIn(false); // Only set back to false on error.
+      setIsSigningIn(false);
     }
   };
 
@@ -90,7 +89,7 @@ export default function SignInPage() {
     return <FirebaseNotConfigured />;
   }
 
-  if (loading) {
+  if (loading || currentUserProfile) {
     return (
       <div className="flex items-center justify-center h-full">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -150,9 +149,18 @@ export default function SignInPage() {
             </Button>
           </CardContent>
         </form>
-        <CardFooter className="flex flex-col gap-4 items-start text-sm">
-          <div className="text-muted-foreground">
-            <p>You can use these test accounts (password: `password123`):</p>
+        <CardFooter className="flex flex-col gap-4 items-center text-sm w-full">
+           <div className="text-muted-foreground text-center">
+              <p>
+                Don't have an account?{' '}
+                <Link href="/signup" className="underline text-primary hover:text-primary/80">
+                  Sign Up
+                </Link>
+              </p>
+            </div>
+          <div className="text-muted-foreground text-xs text-left w-full pt-4 border-t">
+            <p className="font-semibold">Or use a test account:</p>
+            <p>Password is `password123` for both.</p>
             <ul className="list-disc pl-5 mt-1">
               <li>User: `alice@example.com`</li>
               <li>Driver: `charlie@example.com`</li>
