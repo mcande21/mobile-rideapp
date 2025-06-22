@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { cn } from "@/lib/utils";
 import { Toaster } from "@/components/ui/toaster";
-import { Header } from "@/components/Header";
+import { ClientLayout } from "@/components/ClientLayout";
 
 export const metadata: Metadata = {
   title: "Ride Queue",
@@ -34,10 +34,7 @@ export default function RootLayout({
           "font-body"
         )}
       >
-        <div className="flex flex-col h-full">
-          <Header />
-          <main className="flex-1 overflow-y-auto">{children}</main>
-        </div>
+        <ClientLayout>{children}</ClientLayout>
         <Toaster />
       </body>
     </html>

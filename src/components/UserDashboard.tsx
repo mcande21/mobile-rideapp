@@ -28,7 +28,7 @@ import {
 import { Car, Loader2 } from "lucide-react";
 
 export function UserDashboard() {
-  const { rides, addRide, cancelRide } = useRideStore();
+  const { rides, addRide, cancelRide, currentUser } = useRideStore();
   const { toast } = useToast();
   const [pickup, setPickup] = useState("");
   const [dropoff, setDropoff] = useState("");
@@ -73,9 +73,7 @@ export function UserDashboard() {
     });
   };
 
-  const userRides = rides.filter(
-    (ride) => ride.user.name === "Current User"
-  );
+  const userRides = rides.filter((ride) => ride.user.id === currentUser?.id);
   const pendingRides = userRides.filter((ride) => ride.status === "pending");
   const scheduledRides = userRides.filter(
     (ride) => ride.status === "accepted"

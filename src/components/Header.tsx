@@ -1,48 +1,87 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { Car, User } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { useRouter } from "next/navigation";
+import { Car, LogOut } from "lucide-react";
+import { useRideStore } from "@/lib/store";
 import { Button } from "./ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 export function Header() {
-  const pathname = usePathname();
+  const { currentUser, logout } = useRideStore();
+  const router = useRouter();
 
-  const navLinks = [
-    { href: "/", label: "User", icon: User },
-    { href: "/driver", label: "Driver", icon: Car },
-  ];
+  const handleLogout = () => {
+    logout();
+    router.push("/");
+  };
 
   return (
     <header className="border-b bg-card">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-        <Link href="/" className="flex items-center gap-2">
+        <Link
+          href={
+            currentUser
+              ? currentUser.role === "driver"
+                ? "/driver"
+                : "/user"
+              : "/"
+          }
+          className="flex items-center gap-2"
+        >
           <div className="p-2 bg-primary rounded-full">
             <Car className="h-6 w-6 text-primary-foreground" />
           </div>
           <h1 className="text-xl font-bold text-foreground">Ride Queue</h1>
         </Link>
-        <nav className="flex items-center gap-2 rounded-full bg-background p-1 border">
-          {navLinks.map(({ href, label, icon: Icon }) => (
-            <Button
-              key={href}
-              asChild
-              variant={pathname === href ? "default" : "ghost"}
-              className={cn(
-                "rounded-full transition-all",
-                pathname === href &&
-                  "bg-primary text-primary-foreground shadow-md"
-              )}
-              size="sm"
-            >
-              <Link href={href} className="flex items-center gap-2">
-                <Icon className="h-4 w-4" />
-                <span>{label}</span>
-              </Link>
-            </Button>
-          ))}
-        </nav>
+        {currentUser && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                className="relative h-10 w-10 rounded-full"
+              >
+                <Avatar>
+                  <AvatarImage
+                    src={currentUser.avatarUrl}
+                    alt={currentUser.name}
+                  />
+                  <AvatarFallback>
+                    {currentUser.name
+                      .split(" ")
+                      .map((n) => n[0])
+                      .join("")}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <DropdownMenuLabel className="font-normal">
+                <div className="flex flex-col space-y-1">
+                  <p className="text-sm font-medium leading-none">
+                    {currentUser.name}
+                  </p>
+                  <p className="text-xs leading-none text-muted-foreground capitalize">
+                    {currentUser.role}
+                  </p>
+                </div>
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem onClick={handleLogout}>
+                <LogOut className="mr-2 h-4 w-4" />
+                <span>Log out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
     </header>
   );

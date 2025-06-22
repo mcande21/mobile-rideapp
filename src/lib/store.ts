@@ -1,7 +1,14 @@
 "use client";
 
 import { create } from "zustand";
-import type { Ride } from "./types";
+import type { Ride, User } from "./types";
+
+const mockUsers: User[] = [
+  { id: 'user-alice', name: 'Alice Johnson', avatarUrl: 'https://placehold.co/100x100.png', role: 'user' },
+  { id: 'user-bob', name: 'Bob Williams', avatarUrl: 'https://placehold.co/100x100.png', role: 'user' },
+  { id: 'driver-charlie', name: 'Charlie Brown (Driver)', avatarUrl: 'https://placehold.co/100x100.png', role: 'driver' },
+  { id: 'driver-diana', name: 'Diana Miller (Driver)', avatarUrl: 'https://placehold.co/100x100.png', role: 'driver' },
+];
 
 const initialRides: Ride[] = [
   {
@@ -10,10 +17,7 @@ const initialRides: Ride[] = [
     dropoff: "456 Oak Ave, Anytown, USA",
     fare: 25.5,
     status: "pending",
-    user: {
-      name: "Alice Johnson",
-      avatarUrl: "https://placehold.co/100x100.png",
-    },
+    user: mockUsers[0],
   },
   {
     id: "2",
@@ -21,10 +25,7 @@ const initialRides: Ride[] = [
     dropoff: "101 Maple Dr, Anytown, USA",
     fare: 18.75,
     status: "pending",
-    user: {
-      name: "Bob Williams",
-      avatarUrl: "https://placehold.co/100x100.png",
-    },
+    user: mockUsers[1],
   },
   {
     id: "3",
@@ -32,24 +33,36 @@ const initialRides: Ride[] = [
     dropoff: "321 Birch Rd, Anytown, USA",
     fare: 32.0,
     status: "accepted",
-    user: {
-      name: "Charlie Brown",
-      avatarUrl: "https://placehold.co/100x100.png",
-    },
+    user: mockUsers[0],
   },
 ];
 
 interface RideState {
   rides: Ride[];
+  users: User[];
+  currentUser: User | null;
   addRide: (pickup: string, dropoff: string, fare: number) => void;
   acceptRide: (id: string) => void;
   rejectRide: (id: string) => void;
   cancelRide: (id: string) => void;
+  login: (userId: string) => void;
+  logout: () => void;
 }
 
-export const useRideStore = create<RideState>((set) => ({
+export const useRideStore = create<RideState>((set, get) => ({
   rides: initialRides,
-  addRide: (pickup, dropoff, fare) =>
+  users: mockUsers,
+  currentUser: null,
+  login: (userId: string) => {
+    const user = get().users.find((u) => u.id === userId);
+    if (user) {
+      set({ currentUser: user });
+    }
+  },
+  logout: () => set({ currentUser: null }),
+  addRide: (pickup, dropoff, fare) => {
+    const currentUser = get().currentUser;
+    if (!currentUser || currentUser.role !== "user") return;
     set((state) => ({
       rides: [
         ...state.rides,
@@ -59,10 +72,11 @@ export const useRideStore = create<RideState>((set) => ({
           dropoff,
           fare,
           status: "pending",
-          user: { name: "Current User", avatarUrl: "https://placehold.co/100x100.png" },
+          user: currentUser,
         },
       ],
-    })),
+    }));
+  },
   acceptRide: (id) =>
     set((state) => ({
       rides: state.rides.map((ride) =>

@@ -1,4 +1,12 @@
 export type RideStatus = 'pending' | 'accepted' | 'cancelled' | 'completed';
+export type UserRole = 'user' | 'driver';
+
+export interface User {
+  id: string;
+  name: string;
+  avatarUrl: string;
+  role: UserRole;
+}
 
 export interface Ride {
   id: string;
@@ -6,8 +14,5 @@ export interface Ride {
   dropoff: string;
   fare: number;
   status: RideStatus;
-  user: {
-    name: string;
-    avatarUrl: string;
-  };
+  user: User;
 }
