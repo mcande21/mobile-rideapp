@@ -100,9 +100,11 @@ export function UserDashboard() {
         setTransportType("");
         setTransportNumber("");
       } catch (error) {
+        console.error("Error requesting ride:", error);
         toast({
-          title: "Error",
-          description: "Could not request the ride.",
+          title: "Error Requesting Ride",
+          description:
+            "There was a problem submitting your request. Please check the console for more details.",
           variant: "destructive",
         });
       } finally {
