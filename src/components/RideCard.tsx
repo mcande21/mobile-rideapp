@@ -102,24 +102,28 @@ export function RideCard({ ride, children }: RideCardProps) {
           </div>
         </div>
         <div className="border-t pt-4 mt-4 space-y-4">
-          <div className="flex items-center gap-3 text-sm">
-            <CalendarDays className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <span className="font-semibold text-foreground">Date:</span>
-              <span className="text-muted-foreground ml-2">
-                {format(new Date(ride.dateTime), "PPP")}
-              </span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3 text-sm">
-            <Clock className="h-5 w-5 text-muted-foreground" />
-            <div>
-              <span className="font-semibold text-foreground">Time:</span>
-              <span className="text-muted-foreground ml-2">
-                {format(new Date(ride.dateTime), "p")}
-              </span>
-            </div>
-          </div>
+          {ride.dateTime && (
+            <>
+              <div className="flex items-center gap-3 text-sm">
+                <CalendarDays className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <span className="font-semibold text-foreground">Date:</span>
+                  <span className="text-muted-foreground ml-2">
+                    {format(new Date(ride.dateTime), "PPP")}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center gap-3 text-sm">
+                <Clock className="h-5 w-5 text-muted-foreground" />
+                <div>
+                  <span className="font-semibold text-foreground">Time:</span>
+                  <span className="text-muted-foreground ml-2">
+                    {format(new Date(ride.dateTime), "p")}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
           {ride.transportType && ride.transportNumber && (
             <div className="flex items-start gap-3 text-sm">
               <TransportIcon type={ride.transportType} />
