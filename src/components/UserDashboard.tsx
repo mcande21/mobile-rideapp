@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { useRideStore } from "@/lib/store";
 import { RideCard } from "./RideCard";
-import { suggestFare } from "@/ai/flows/suggest-fare-flow";
 import {
   Card,
   CardContent,
@@ -64,52 +63,23 @@ export function UserDashboard() {
   const [transportType, setTransportType] = useState<TransportType | "">("");
   const [transportNumber, setTransportNumber] = useState("");
 
-  const [fare, setFare] = useState(0);
-  const [isCalculatingFare, setIsCalculatingFare] = useState(false);
+  const fixedFare = 25;
 
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
   }, []);
 
-  useEffect(() => {
-    const handler = setTimeout(async () => {
-      if (pickup.length > 2 && dropoff.length > 2) {
-        setIsCalculatingFare(true);
-        try {
-          const result = await suggestFare({ pickup, dropoff });
-          setFare(result.fare);
-        } catch (e) {
-          console.error("Error suggesting fare:", e);
-          toast({
-            title: "Error Calculating Fare",
-            description: "Could not estimate the ride fare.",
-            variant: "destructive",
-          });
-          setFare(0);
-        } finally {
-          setIsCalculatingFare(false);
-        }
-      } else {
-        setFare(0);
-      }
-    }, 500); // 500ms debounce
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [pickup, dropoff, toast]);
-
   const handleRequestRide = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (fare > 0 && date && time) {
+    if (pickup && dropoff && date && time) {
       setIsSubmitting(true);
       try {
         const [hours, minutes] = time.split(":").map(Number);
         const combinedDateTime = new Date(date);
         combinedDateTime.setHours(hours, minutes, 0, 0);
 
-        await addRide(pickup, dropoff, fare, {
+        await addRide(pickup, dropoff, fixedFare, {
           dateTime: combinedDateTime.toISOString(),
           direction,
           ...(transportType && { transportType }),
@@ -129,7 +99,6 @@ export function UserDashboard() {
         setDirection("departure");
         setTransportType("");
         setTransportNumber("");
-        setFare(0);
       } catch (error) {
         toast({
           title: "Error",
@@ -320,27 +289,13 @@ export function UserDashboard() {
               </div>
 
               <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
-                {isCalculatingFare ? (
-                  <>
-                    <Loader2 className="animate-spin" /> Calculating Fare...
-                  </>
-                ) : fare > 0 ? (
-                  <>
-                    <BadgeDollarSign/> Estimated Fare: ${fare.toFixed(2)}
-                  </>
-                ) : (
-                  <span className="text-sm text-muted-foreground">
-                    Enter locations to estimate fare
-                  </span>
-                )}
+                <BadgeDollarSign /> Fare: ${fixedFare.toFixed(2)}
               </div>
 
               <Button
                 type="submit"
                 className="w-full transition-all"
-                disabled={
-                  !fare || !date || !time || isSubmitting || isCalculatingFare
-                }
+                disabled={!pickup || !dropoff || !date || !time || isSubmitting}
               >
                 {isSubmitting ? (
                   <Loader2 className="animate-spin" />
