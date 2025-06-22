@@ -48,15 +48,30 @@ import {
   BadgeDollarSign,
 } from "lucide-react";
 import type { Direction, TransportType } from "@/lib/types";
+import { useForm } from "react-hook-form";
+import { Autocomplete } from "./Autocomplete";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
+
+const formSchema = z.object({
+  pickup: z.string().min(1, "Pickup location is required"),
+  dropoff: z.string().min(1, "Drop-off location is required"),
+});
 
 export function UserDashboard() {
   const { rides, addRide, cancelRide, currentUserProfile } = useRideStore();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const form = useForm<z.infer<typeof formSchema>>({
+    resolver: zodResolver(formSchema),
+    defaultValues: {
+      pickup: "",
+      dropoff: "",
+    },
+  });
+
   // Form state
-  const [pickup, setPickup] = useState("");
-  const [dropoff, setDropoff] = useState("");
   const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("");
   const [direction, setDirection] = useState<Direction>("departure");
@@ -70,16 +85,15 @@ export function UserDashboard() {
     setIsClient(true);
   }, []);
 
-  const handleRequestRide = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (pickup && dropoff && date && time) {
+  const handleRequestRide = async (values: z.infer<typeof formSchema>) => {
+    if (date && time) {
       setIsSubmitting(true);
       try {
         const [hours, minutes] = time.split(":").map(Number);
         const combinedDateTime = new Date(date);
         combinedDateTime.setHours(hours, minutes, 0, 0);
 
-        await addRide(pickup, dropoff, fixedFare, {
+        await addRide(values.pickup, values.dropoff, fixedFare, {
           dateTime: combinedDateTime.toISOString(),
           direction,
           ...(transportType && { transportType }),
@@ -92,8 +106,7 @@ export function UserDashboard() {
         });
 
         // Reset form
-        setPickup("");
-        setDropoff("");
+        form.reset();
         setDate(undefined);
         setTime("");
         setDirection("departure");
@@ -157,27 +170,19 @@ export function UserDashboard() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <form onSubmit={handleRequestRide} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="pickup">Pickup Location</Label>
-                <Input
-                  id="pickup"
-                  placeholder="e.g., 123 Main St"
-                  value={pickup}
-                  onChange={(e) => setPickup(e.target.value)}
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="dropoff">Drop-off Location</Label>
-                <Input
-                  id="dropoff"
-                  placeholder="e.g., Anytown Airport"
-                  value={dropoff}
-                  onChange={(e) => setDropoff(e.target.value)}
-                  required
-                />
-              </div>
+            <form onSubmit={form.handleSubmit(handleRequestRide)} className="space-y-4">
+              <Autocomplete
+                control={form.control}
+                name="pickup"
+                label="Pickup Location"
+                placeholder="e.g., 123 Main St"
+              />
+              <Autocomplete
+                control={form.control}
+                name="dropoff"
+                label="Drop-off Location"
+                placeholder="e.g., Anytown Airport"
+              />
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="date">Date</Label>
@@ -297,7 +302,7 @@ export function UserDashboard() {
               <Button
                 type="submit"
                 className="w-full transition-all"
-                disabled={!pickup || !dropoff || !date || !time || isSubmitting}
+                disabled={!date || !time || isSubmitting}
               >
                 {isSubmitting ? (
                   <Loader2 className="animate-spin" />

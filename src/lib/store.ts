@@ -1,4 +1,3 @@
-
 "use client";
 
 import { create } from "zustand";
@@ -135,30 +134,47 @@ export const useRideStore = create<RideState>((set, get) => ({
     if (!auth) throw new Error("Firebase not configured");
     await signOut(auth);
   },
-  addRide: async (pickup, dropoff, fare, details) => {
+  addRide: async (
+    pickup,
+    dropoff,
+    fare,
+    details
+  ) => {
     const { currentUserProfile } = get();
-    if (!db || !currentUserProfile) throw new Error("User not signed in");
+    if (!currentUserProfile || !db) return;
 
-    const userPayload: Partial<User> = {
-      id: currentUserProfile.id,
-      name: currentUserProfile.name,
-      avatarUrl: currentUserProfile.avatarUrl,
-      role: currentUserProfile.role,
-    };
-    if (currentUserProfile.phoneNumber) {
-      userPayload.phoneNumber = currentUserProfile.phoneNumber;
+    try {
+      const directionsResponse = await fetch("/api/directions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ origin: pickup, destination: dropoff }),
+      });
+
+      if (!directionsResponse.ok) {
+        throw new Error("Failed to fetch directions");
+      }
+
+      const { duration } = await directionsResponse.json();
+
+      const newRide: Omit<Ride, "id"> = {
+        user: currentUserProfile,
+        pickup,
+        dropoff,
+        fare,
+        status: "pending",
+        createdAt: serverTimestamp(),
+        ...details,
+        transportType: details.transportType === "" ? undefined : details.transportType,
+        duration: duration || 60, // Fallback to 60 minutes
+      };
+
+      await addDoc(collection(db, "rides"), newRide);
+    } catch (error) {
+      console.error("Error adding ride:", error);
+      throw error;
     }
-
-    await addDoc(collection(db, "rides"), {
-      pickup,
-      dropoff,
-      fare,
-      status: "pending",
-      user: userPayload,
-      createdAt: serverTimestamp(),
-      duration: 60,
-      ...details,
-    });
   },
   acceptRide: async (id: string) => {
     const { currentUserProfile } = get();

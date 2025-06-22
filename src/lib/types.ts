@@ -1,4 +1,3 @@
-
 export type RideStatus = "pending" | "accepted" | "cancelled" | "completed";
 export type UserRole = "user" | "driver";
 export type TransportType = "flight" | "train" | "bus";
@@ -21,11 +20,7 @@ export interface Ride {
   status: RideStatus;
   user: User; // Denormalized user data
   driver?: User; // Denormalized driver data
-  createdAt: {
-    // The time the request was made
-    seconds: number;
-    nanoseconds: number;
-  };
+  createdAt: any; // The time the request was made
   dateTime: string; // ISO string for the ride's scheduled date and time
   transportType?: TransportType;
   transportNumber?: string;

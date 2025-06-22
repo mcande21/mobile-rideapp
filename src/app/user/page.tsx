@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useRideStore } from '@/lib/store';
+import { APIProvider } from "@vis.gl/react-google-maps";
 import { UserDashboard } from "@/components/UserDashboard";
 import { Loader2 } from 'lucide-react';
 
@@ -28,5 +29,9 @@ export default function UserPage() {
     );
   }
   
-  return <UserDashboard />;
+  return (
+    <APIProvider apiKey={process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY!}>
+      <UserDashboard />
+    </APIProvider>
+  );
 }
