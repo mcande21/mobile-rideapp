@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from "react";
+import { useState, type ReactNode, useEffect } from "react";
 import {
   MapPin,
   CircleDollarSign,
@@ -12,6 +12,9 @@ import {
   Check,
   Phone,
   UserRound,
+  RefreshCw,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import type { Ride, TransportType } from "@/lib/types";
 import {
@@ -24,8 +27,25 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
+import { formatInTimeZone } from "date-fns-tz";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+
+interface FlightData {
+  flight_status: string;
+  departure: {
+    airport: string;
+    scheduled: string;
+    actual?: string;
+    timezone?: string;
+  };
+  arrival: {
+    airport: string;
+    scheduled: string;
+    actual?: string;
+    timezone?: string;
+  };
+}
 
 interface RideCardProps {
   ride: Ride;
@@ -64,6 +84,34 @@ export function RideCard({
 }: RideCardProps) {
   const [isEditingFare, setIsEditingFare] = useState(false);
   const [newFare, setNewFare] = useState(ride.fare);
+  const [flightData, setFlightData] = useState<FlightData | null>(null);
+  const [isLoadingFlightData, setIsLoadingFlightData] = useState(false);
+  const [showFlightDetails, setShowFlightDetails] = useState(false);
+
+  const fetchFlightData = async () => {
+    if (ride.transportType === "flight" && ride.transportNumber) {
+      setIsLoadingFlightData(true);
+      try {
+        const response = await fetch(
+          `/api/flight?flightNumber=${ride.transportNumber}`
+        );
+        if (response.ok) {
+          const data = await response.json();
+          setFlightData(data);
+        } else {
+          console.error("Failed to fetch flight data");
+        }
+      } catch (error) {
+        console.error("Error fetching flight data:", error);
+      } finally {
+        setIsLoadingFlightData(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    fetchFlightData();
+  }, [ride.transportType, ride.transportNumber]);
 
   const handleSaveFare = () => {
     if (onUpdateFare) {
@@ -226,20 +274,106 @@ export function RideCard({
               </div>
             </div>
           )}
-          {ride.transportType && ride.transportNumber && (
-            <div className="flex items-start gap-3 text-sm">
-              <TransportIcon type={ride.transportType} />
-              <div>
-                <span className="font-semibold text-foreground capitalize">
-                  {ride.transportType}:
-                </span>
-                <p className="text-muted-foreground">
-                  {ride.transportNumber} (
-                  <span className="capitalize">{ride.direction}</span>)
-                </p>
+          {ride.transportType === "flight" && ride.transportNumber && (
+            <div className="border-t pt-4 mt-4 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-start gap-3 text-sm">
+                  <TransportIcon type={ride.transportType} />
+                  <div>
+                    <span className="font-semibold text-foreground capitalize">
+                      {ride.transportType}:
+                    </span>
+                    <p className="text-muted-foreground">
+                      {ride.transportNumber} (
+                      <span className="capitalize">{ride.direction}</span>)
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={fetchFlightData}
+                    disabled={isLoadingFlightData}
+                    className="h-8 w-8"
+                  >
+                    {isLoadingFlightData ? (
+                      <RefreshCw className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <RefreshCw className="h-4 w-4" />
+                    )}
+                    <span className="sr-only">Refresh flight data</span>
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => setShowFlightDetails(!showFlightDetails)}
+                    className="h-8 w-8"
+                  >
+                    {showFlightDetails ? (
+                      <ChevronUp className="h-4 w-4" />
+                    ) : (
+                      <ChevronDown className="h-4 w-4" />
+                    )}
+                    <span className="sr-only">Toggle flight details</span>
+                  </Button>
+                </div>
               </div>
+              {showFlightDetails && flightData && (
+                <div className="pl-8 space-y-2 text-xs text-muted-foreground">
+                  <p>Status: {flightData.flight_status}</p>
+                  <p>
+                    Departure: {flightData.departure.airport} - Scheduled:{" "}
+                    {formatInTimeZone(
+                      new Date(flightData.departure.scheduled),
+                      flightData.departure.timezone || "America/New_York",
+                      "p"
+                    )}{" "}
+                    - Actual:{" "}
+                    {flightData.departure.actual
+                      ? formatInTimeZone(
+                          new Date(flightData.departure.actual),
+                          flightData.departure.timezone || "America/New_York",
+                          "p"
+                        )
+                      : "N/A"}
+                  </p>
+                  <p>
+                    Arrival: {flightData.arrival.airport} - Scheduled:{" "}
+                    {formatInTimeZone(
+                      new Date(flightData.arrival.scheduled),
+                      flightData.arrival.timezone || "America/New_York",
+                      "p"
+                    )}{' '}
+                    - Actual:{" "}
+                    {flightData.arrival.actual
+                      ? formatInTimeZone(
+                          new Date(flightData.arrival.actual),
+                          flightData.arrival.timezone || "America/New_York",
+                          "p"
+                        )
+                      : "N/A"}
+                  </p>
+                </div>
+              )}
             </div>
           )}
+          {ride.transportType !== "flight" &&
+            ride.transportType &&
+            ride.transportNumber && (
+              <div className="flex items-start gap-3 text-sm">
+                <TransportIcon type={ride.transportType} />
+                <div>
+                  <span className="font-semibold text-foreground capitalize">
+                    {ride.transportType}:
+                  </span>
+                  <p className="text-muted-foreground">
+                    {ride.transportNumber} (
+                    <span className="capitalize">{ride.direction}</span>)
+                  </p>
+                </div>
+              </div>
+            )}
         </div>
         {ride.driver && (
           <div className="border-t pt-4 mt-4 space-y-3">

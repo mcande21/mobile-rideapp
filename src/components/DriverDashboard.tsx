@@ -6,10 +6,22 @@ import { RideCard } from "./RideCard";
 import { Button } from "./ui/button";
 import { Check, Loader2, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "./ui/separator";
 
 export function DriverDashboard() {
-  const { rides, acceptRide, rejectRide, updateRideFare } = useRideStore();
+  const { rides, acceptRide, rejectRide, updateRideFare, cancelRideByDriver, completeRide } =
+    useRideStore();
   const { toast } = useToast();
   
   const [isClient, setIsClient] = useState(false);
@@ -49,6 +61,39 @@ export function DriverDashboard() {
     }
   };
 
+  const handleCancelRide = async (id: string) => {
+    try {
+      await cancelRideByDriver(id);
+      toast({
+        title: "Ride Cancelled",
+        description: "The ride has been successfully cancelled.",
+        variant: "destructive",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Could not cancel the ride.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleCompleteRide = async (id: string) => {
+    try {
+      await completeRide(id);
+      toast({
+        title: "Ride Completed!",
+        description: "The ride has been marked as completed.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Could not complete the ride.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleUpdateFare = async (id: string, fare: number) => {
     try {
       await updateRideFare(id, fare);
@@ -67,6 +112,7 @@ export function DriverDashboard() {
 
   const newRequests = rides.filter((ride) => ride.status === "pending");
   const acceptedRides = rides.filter((ride) => ride.status === "accepted");
+  const completedRides = rides.filter((ride) => ride.status === "completed");
 
   if (!isClient) {
     return (
@@ -126,11 +172,59 @@ export function DriverDashboard() {
                 ride={ride}
                 onUpdateFare={handleUpdateFare}
                 showPhoneNumber={true}
-              />
+              >
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button variant="destructive">Cancel Ride</Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        Are you sure you want to cancel?
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will notify the user that you have cancelled the
+                        ride. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Keep Ride</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => handleCancelRide(ride.id)}
+                      >
+                        Confirm Cancellation
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+                 <Button onClick={() => handleCompleteRide(ride.id)} className="ml-2">
+                  Complete Ride
+                </Button>
+              </RideCard>
             ))}
           </div>
         ) : (
           <p className="text-muted-foreground">You have no accepted rides.</p>
+        )}
+      </div>
+
+      <Separator />
+
+      <div>
+        <h2 className="text-3xl font-bold mb-4">Completed Rides</h2>
+        {completedRides.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {completedRides.map((ride) => (
+              <RideCard
+                key={ride.id}
+                ride={ride}
+                onUpdateFare={handleUpdateFare}
+                showPhoneNumber={true}
+              />
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted-foreground">You have no completed rides.</p>
         )}
       </div>
     </div>

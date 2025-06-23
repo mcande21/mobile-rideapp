@@ -150,6 +150,9 @@ export function UserDashboard() {
   const scheduledRides = userRides.filter(
     (ride) => ride.status === "accepted"
   );
+  const completedRides = userRides.filter(
+    (ride) => ride.status === "completed"
+  );
 
   if (!isClient) {
     return (
@@ -369,6 +372,21 @@ export function UserDashboard() {
           ) : (
             <p className="text-muted-foreground">
               You have no pending ride requests.
+            </p>
+          )}
+        </div>
+        <Separator />
+        <div>
+          <h2 className="text-2xl font-bold mb-4">Completed Rides</h2>
+          {completedRides.length > 0 ? (
+            <div className="space-y-4">
+              {completedRides.map((ride) => (
+                <RideCard key={ride.id} ride={ride} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">
+              You have no completed rides.
             </p>
           )}
         </div>
