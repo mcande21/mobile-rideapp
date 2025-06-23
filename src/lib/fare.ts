@@ -86,17 +86,55 @@ const trainStationAddresses = {
  * @param pickupLocation The starting point of the trip.
  * @param dropoffLocation The destination of the trip.
  * @param timeRequested The requested time for the trip.
- * @param mileage The total mileage of the trip.
  * @param isRoundTrip Whether the trip is a round trip.
  * @returns The calculated fare.
  */
-export function calculateTripFare(
+export async function calculateTripFare(
   pickupLocation: string,
   dropoffLocation: string,
   timeRequested: Date,
-  mileage: number,
   isRoundTrip: boolean
-): number {
+): Promise<number> {
+  // Fetch mileage from the directions API
+  const directionsResponse = await fetch("/api/directions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      origin: pickupLocation,
+      destination: dropoffLocation,
+    }),
+  });
+
+  if (!directionsResponse.ok) {
+    let errorBody;
+    try {
+      errorBody = await directionsResponse.json();
+    } catch (e) {
+      errorBody = { error: "Failed to parse error response." };
+    }
+    console.error("Error fetching directions:", {
+      status: directionsResponse.status,
+      statusText: directionsResponse.statusText,
+      body: errorBody,
+    });
+    throw new Error(
+      `Failed to fetch directions: ${errorBody.error || "Unknown error"}`
+    );
+  }
+
+  const directionsData = await directionsResponse.json();
+
+  if (!directionsData.distance || typeof directionsData.distance.value !== "number") {
+    throw new Error(
+      "Could not calculate distance from directions API response."
+    );
+  }
+
+  // Convert meters to miles
+  const mileage = directionsData.distance.value / 1609.34;
+
   // Pricing logic from https://www.ajsairportruns.com/
   const airportRates = {
     Newark: { base: 165, mileageMultiplier: 1.5 },

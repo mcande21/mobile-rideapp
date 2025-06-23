@@ -51,6 +51,7 @@ interface RideState {
       transportType?: TransportType | "";
       transportNumber?: string;
       direction?: Direction;
+      isRoundTrip?: boolean;
     }
   ) => Promise<void>;
   acceptRide: (id: string) => Promise<void>;
@@ -168,7 +169,8 @@ export const useRideStore = create<RideState>((set, get) => ({
         status: "pending",
         createdAt: serverTimestamp(),
         ...details,
-        transportType: details.transportType === "" ? undefined : details.transportType,
+        transportType:
+          details.transportType === "" ? undefined : details.transportType,
         duration: duration || 60, // Fallback to 60 minutes
       };
 

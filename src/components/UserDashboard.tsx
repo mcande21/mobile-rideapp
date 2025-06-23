@@ -36,6 +36,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "./ui/select";
+import { Switch } from "./ui/switch";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import {
@@ -52,7 +53,7 @@ import { useForm } from "react-hook-form";
 import { Autocomplete } from "./Autocomplete";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { calculateFare } from "@/lib/fare";
+import { calculateTripFare } from "@/lib/fare";
 
 const formSchema = z.object({
   pickup: z.string().min(1, "Pickup location is required"),
@@ -81,25 +82,63 @@ export function UserDashboard() {
   const [direction, setDirection] = useState<Direction>("departure");
   const [transportType, setTransportType] = useState<TransportType | "">("");
   const [transportNumber, setTransportNumber] = useState("");
+  const [isRoundTrip, setIsRoundTrip] = useState(false);
+  const [fare, setFare] = useState<number | null>(null);
+  const [isCalculatingFare, setIsCalculatingFare] = useState(false);
 
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
   }, []);
 
+  useEffect(() => {
+    const calculate = async () => {
+      if (pickup && dropoff && date && time) {
+        setIsCalculatingFare(true);
+        try {
+          const [hours, minutes] = time.split(":").map(Number);
+          const combinedDateTime = new Date(date);
+          combinedDateTime.setHours(hours, minutes, 0, 0);
+
+          const calculatedFare = await calculateTripFare(
+            pickup,
+            dropoff,
+            combinedDateTime,
+            isRoundTrip
+          );
+          setFare(calculatedFare);
+        } catch (error) {
+          console.error("Error calculating fare:", error);
+          setFare(null);
+        } finally {
+          setIsCalculatingFare(false);
+        }
+      } else {
+        setFare(null);
+      }
+    };
+
+    const handler = setTimeout(() => {
+      calculate();
+    }, 500);
+
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [pickup, dropoff, date, time, isRoundTrip]);
+
   const handleRequestRide = async (values: z.infer<typeof formSchema>) => {
-    if (date && time) {
+    if (date && time && fare !== null) {
       setIsSubmitting(true);
       try {
         const [hours, minutes] = time.split(":").map(Number);
         const combinedDateTime = new Date(date);
         combinedDateTime.setHours(hours, minutes, 0, 0);
 
-        const fare = calculateFare(values);
-
         await addRide(values.pickup, values.dropoff, fare, {
           dateTime: combinedDateTime.toISOString(),
           direction,
+          isRoundTrip,
           ...(transportType && { transportType }),
           ...(transportNumber && { transportNumber }),
         });
@@ -116,6 +155,8 @@ export function UserDashboard() {
         setDirection("departure");
         setTransportType("");
         setTransportNumber("");
+        setIsRoundTrip(false);
+        setFare(null);
       } catch (error) {
         console.error("Error requesting ride:", error);
         toast({
@@ -228,6 +269,14 @@ export function UserDashboard() {
                   />
                 </div>
               </div>
+              <div className="flex items-center space-x-2 pt-2">
+                <Switch
+                  id="round-trip"
+                  checked={isRoundTrip}
+                  onCheckedChange={setIsRoundTrip}
+                />
+                <Label htmlFor="round-trip">Round Trip</Label>
+              </div>
               <div className="space-y-2">
                 <Label>Transport Details (Optional)</Label>
                 <div className="p-4 border rounded-lg space-y-4">
@@ -302,17 +351,21 @@ export function UserDashboard() {
                 </div>
               </div>
 
-              {pickup && dropoff && (
-                <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
-                  <BadgeDollarSign /> Fare: ${" "}
-                  {calculateFare(form.getValues()).toFixed(2)}
-                </div>
-              )}
+              <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
+                <BadgeDollarSign /> Fare:{" "}
+                {isCalculatingFare ? (
+                  <Loader2 className="animate-spin" />
+                ) : fare !== null ? (
+                  `$${fare.toFixed(2)}`
+                ) : (
+                  "--"
+                )}
+              </div>
 
               <Button
                 type="submit"
                 className="w-full transition-all"
-                disabled={!date || !time || isSubmitting}
+                disabled={!date || !time || isSubmitting || fare === null}
               >
                 {isSubmitting ? (
                   <Loader2 className="animate-spin" />
