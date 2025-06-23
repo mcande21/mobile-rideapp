@@ -1,3 +1,4 @@
+
 export type RideStatus = "pending" | "accepted" | "cancelled" | "completed";
 export type UserRole = "user" | "driver";
 export type TransportType = "flight" | "train" | "bus";
@@ -28,7 +29,9 @@ export interface Ride {
   direction?: Direction;
   duration: number; // Estimated duration in minutes
   isRoundTrip?: boolean;
+  returnDateTime?: string; // ISO string for the return trip
   isPaid?: boolean;
+  isRevised?: boolean;
 }
 
 export interface TransportOptions {

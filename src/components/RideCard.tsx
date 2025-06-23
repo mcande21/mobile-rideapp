@@ -1,3 +1,4 @@
+
 import { useState, type ReactNode, useEffect } from "react";
 import {
   MapPin,
@@ -15,6 +16,7 @@ import {
   RefreshCw,
   ChevronDown,
   ChevronUp,
+  Undo2,
 } from "lucide-react";
 import type { Ride, TransportType } from "@/lib/types";
 import {
@@ -174,11 +176,13 @@ export function RideCard({
   return (
     <Card className="w-full transition-all hover:shadow-md flex flex-col">
       <CardHeader>
-        {ride.isRoundTrip && (
-          <div className="flex justify-center mb-2">
-            <Badge variant="destructive">ROUND TRIP</Badge>
-          </div>
-        )}
+        <div className="flex justify-between items-start mb-2">
+           <div className="flex items-center gap-2">
+            {ride.isRevised && <Badge variant="destructive">REVISED</Badge>}
+            {ride.isRoundTrip && <Badge variant="destructive">ROUND TRIP</Badge>}
+           </div>
+        </div>
+
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
             <Avatar>
@@ -298,6 +302,19 @@ export function RideCard({
                   <span className="font-semibold text-foreground">Time:</span>
                   <span className="text-muted-foreground ml-2">
                     {format(new Date(ride.dateTime), "p")}
+                  </span>
+                </div>
+              </div>
+            </>
+          )}
+          {ride.returnDateTime && (
+            <>
+              <div className="flex items-center gap-3 text-sm">
+                <Undo2 className="h-5 w-5 text-muted-foreground" />
+                 <div>
+                  <span className="font-semibold text-foreground">Return:</span>
+                  <span className="text-muted-foreground ml-2">
+                    {format(new Date(ride.returnDateTime), "PPP, p")}
                   </span>
                 </div>
               </div>

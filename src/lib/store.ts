@@ -1,3 +1,4 @@
+
 "use client";
 
 import { create } from "zustand";
@@ -52,6 +53,21 @@ interface RideState {
       transportNumber?: string;
       direction?: Direction;
       isRoundTrip?: boolean;
+      returnDateTime?: string;
+    }
+  ) => Promise<void>;
+  updateRide: (
+    rideId: string,
+    pickup: string,
+    dropoff: string,
+    fare: number,
+    details: {
+      dateTime: string;
+      transportType?: TransportType | "";
+      transportNumber?: string;
+      direction?: Direction;
+      isRoundTrip?: boolean;
+      returnDateTime?: string;
     }
   ) => Promise<void>;
   acceptRide: (id: string) => Promise<void>;
@@ -160,11 +176,23 @@ export const useRideStore = create<RideState>((set, get) => ({
       if (!directionsResponse.ok) {
         throw new Error("Failed to fetch directions");
       }
-
       const { duration } = await directionsResponse.json();
 
-      const newRide: Omit<Ride, "id"> = {
-        user: currentUserProfile,
+      const userPayload: Partial<User> = {
+        id: currentUserProfile.id,
+        name: currentUserProfile.name,
+        avatarUrl: currentUserProfile.avatarUrl,
+        role: currentUserProfile.role,
+      };
+      if (currentUserProfile.phoneNumber) {
+        userPayload.phoneNumber = currentUserProfile.phoneNumber;
+      }
+      if (currentUserProfile.homeAddress) {
+        userPayload.homeAddress = currentUserProfile.homeAddress;
+      }
+
+      const newRide: Omit<Ride, "id" | "user"> & { user: Partial<User> } = {
+        user: userPayload,
         pickup,
         dropoff,
         fare,
@@ -182,6 +210,46 @@ export const useRideStore = create<RideState>((set, get) => ({
       throw error;
     }
   },
+  updateRide: async (
+    rideId,
+    pickup,
+    dropoff,
+    fare,
+    details
+  ) => {
+    if (!db) return;
+    try {
+      const directionsResponse = await fetch("/api/directions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ origin: pickup, destination: dropoff }),
+      });
+
+      if (!directionsResponse.ok) {
+        throw new Error("Failed to fetch directions");
+      }
+      const { duration } = await directionsResponse.json();
+
+      const rideRef = doc(db, "rides", rideId);
+      await updateDoc(rideRef, {
+        pickup,
+        dropoff,
+        fare,
+        ...details,
+        transportType:
+          details.transportType === "" ? undefined : details.transportType,
+        duration: duration || 60,
+        status: "pending",
+        driver: null,
+        isRevised: true,
+      });
+    } catch (error) {
+      console.error("Error updating ride:", error);
+      throw error;
+    }
+  },
   acceptRide: async (id: string) => {
     const { currentUserProfile } = get();
     if (!db || !currentUserProfile || currentUserProfile.role !== "driver") {
@@ -194,6 +262,7 @@ export const useRideStore = create<RideState>((set, get) => ({
       name: currentUserProfile.name,
       avatarUrl: currentUserProfile.avatarUrl,
       role: currentUserProfile.role,
+      venmoUsername: currentUserProfile.venmoUsername,
     };
     if (currentUserProfile.phoneNumber) {
       driverPayload.phoneNumber = currentUserProfile.phoneNumber;
@@ -202,6 +271,7 @@ export const useRideStore = create<RideState>((set, get) => ({
     await updateDoc(rideDocRef, {
       status: "accepted",
       driver: driverPayload,
+      isRevised: false, // No longer needs 'revised' status
     });
   },
   rejectRide: async (id: string) => {
