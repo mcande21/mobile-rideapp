@@ -1,4 +1,4 @@
-export type RideStatus = "pending" | "accepted" | "cancelled" | "completed" | "revised";
+export type RideStatus = "pending" | "accepted" | "cancelled" | "completed";
 export type UserRole = "user" | "driver";
 export type TransportType = "flight" | "train" | "bus";
 export type Direction = "arrival" | "departure";
@@ -27,5 +27,4 @@ export interface Ride {
   direction?: Direction;
   duration: number; // Estimated duration in minutes
   isRoundTrip?: boolean;
-  isRevised?: boolean;
 }
