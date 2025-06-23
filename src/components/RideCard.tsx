@@ -27,7 +27,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
-import { formatInTimeZone } from "date-fns-tz";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 
@@ -74,6 +73,19 @@ const formatDuration = (minutes: number) => {
     parts.push(`${remainingMinutes}m`);
   }
   return parts.join(" ");
+};
+
+const formatTimeToAMPM = (isoString: string | undefined) => {
+  if (!isoString) return "N/A";
+  const timePart = isoString.match(/T(\d{2}:\d{2})/)?.[1];
+  if (!timePart) return "N/A";
+
+  let [hours, minutes] = timePart.split(":");
+  let h = parseInt(hours, 10);
+  const ampm = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  h = h ? h : 12; // the hour '0' should be '12'
+  return `${h}:${minutes} ${ampm}`;
 };
 
 export function RideCard({
@@ -144,7 +156,6 @@ export function RideCard({
               <AvatarImage
                 src={ride.user.avatarUrl}
                 alt={ride.user.name}
-                data-ai-hint="person face"
               />
               <AvatarFallback>
                 {ride.user.name
@@ -322,38 +333,20 @@ export function RideCard({
               {showFlightDetails && flightData && (
                 <div className="pl-8 space-y-2 text-xs text-muted-foreground">
                   <p>Status: {flightData.flight_status}</p>
-                  <p>
-                    Departure: {flightData.departure.airport} - Scheduled:{" "}
-                    {formatInTimeZone(
-                      new Date(flightData.departure.scheduled),
-                      flightData.departure.timezone || "America/New_York",
-                      "p"
-                    )}{" "}
-                    - Actual:{" "}
-                    {flightData.departure.actual
-                      ? formatInTimeZone(
-                          new Date(flightData.departure.actual),
-                          flightData.departure.timezone || "America/New_York",
-                          "p"
-                        )
-                      : "N/A"}
-                  </p>
-                  <p>
-                    Arrival: {flightData.arrival.airport} - Scheduled:{" "}
-                    {formatInTimeZone(
-                      new Date(flightData.arrival.scheduled),
-                      flightData.arrival.timezone || "America/New_York",
-                      "p"
-                    )}{' '}
-                    - Actual:{" "}
-                    {flightData.arrival.actual
-                      ? formatInTimeZone(
-                          new Date(flightData.arrival.actual),
-                          flightData.arrival.timezone || "America/New_York",
-                          "p"
-                        )
-                      : "N/A"}
-                  </p>
+                  {ride.direction === "departure" && (
+                    <p>
+                      Departure: {flightData.departure.airport} - Scheduled:{" "}
+                      {formatTimeToAMPM(flightData.departure.scheduled)} - Actual:{" "}
+                      {formatTimeToAMPM(flightData.departure.actual)}
+                    </p>
+                  )}
+                  {ride.direction === "arrival" && (
+                    <p>
+                      Arrival: {flightData.arrival.airport} - Scheduled:{" "}
+                      {formatTimeToAMPM(flightData.arrival.scheduled)} - Actual:{" "}
+                      {formatTimeToAMPM(flightData.arrival.actual)}
+                    </p>
+                  )}
                 </div>
               )}
             </div>
@@ -386,7 +379,6 @@ export function RideCard({
                 <AvatarImage
                   src={ride.driver.avatarUrl}
                   alt={ride.driver.name}
-                  data-ai-hint="driver person"
                 />
                 <AvatarFallback>
                   {ride.driver.name

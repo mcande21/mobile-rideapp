@@ -52,6 +52,7 @@ import { useForm } from "react-hook-form";
 import { Autocomplete } from "./Autocomplete";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { calculateFare } from "@/lib/fare";
 
 const formSchema = z.object({
   pickup: z.string().min(1, "Pickup location is required"),
@@ -71,14 +72,15 @@ export function UserDashboard() {
     },
   });
 
+  const pickup = form.watch("pickup");
+  const dropoff = form.watch("dropoff");
+
   // Form state
   const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("");
   const [direction, setDirection] = useState<Direction>("departure");
   const [transportType, setTransportType] = useState<TransportType | "">("");
   const [transportNumber, setTransportNumber] = useState("");
-
-  const fixedFare = 25;
 
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
@@ -93,7 +95,9 @@ export function UserDashboard() {
         const combinedDateTime = new Date(date);
         combinedDateTime.setHours(hours, minutes, 0, 0);
 
-        await addRide(values.pickup, values.dropoff, fixedFare, {
+        const fare = calculateFare(values);
+
+        await addRide(values.pickup, values.dropoff, fare, {
           dateTime: combinedDateTime.toISOString(),
           direction,
           ...(transportType && { transportType }),
@@ -298,9 +302,12 @@ export function UserDashboard() {
                 </div>
               </div>
 
-              <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
-                <BadgeDollarSign /> Fare: ${fixedFare.toFixed(2)}
-              </div>
+              {pickup && dropoff && (
+                <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
+                  <BadgeDollarSign /> Fare: ${" "}
+                  {calculateFare(form.getValues()).toFixed(2)}
+                </div>
+              )}
 
               <Button
                 type="submit"

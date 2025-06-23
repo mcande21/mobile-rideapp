@@ -21,7 +21,7 @@ export async function GET(request: Request) {
 
   try {
     const response = await fetch(
-      `http://api.aviationstack.com/v1/flights?access_key=${apiKey}&flight_iata=${flightNumber}`
+      `https://api.aviationstack.com/v1/flights?access_key=${apiKey}&flight_iata=${flightNumber}`
     );
     const data = await response.json();
 
@@ -32,14 +32,12 @@ export async function GET(request: Request) {
         departure: {
           airport: flight.departure.airport,
           scheduled: flight.departure.scheduled,
-          actual: flight.departure.actual,
           timezone: flight.departure.timezone,
         },
         arrival: {
           airport: flight.arrival.airport,
           scheduled: flight.arrival.scheduled,
-          actual: flight.arrival.actual,
-          timezone: flight.arrival.timezone,
+          timezone: flight.arrival.timezone
         },
       };
       return NextResponse.json(relevantData);
