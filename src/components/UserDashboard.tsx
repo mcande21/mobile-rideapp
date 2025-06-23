@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -214,8 +213,8 @@ export function UserDashboard() {
           direction,
           isRoundTrip,
           returnDateTime: returnDateTimeStr,
-          transportType,
-          transportNumber,
+          transportType: transportType && transportNumber ? transportType : "",
+          transportNumber: transportType && transportNumber ? transportNumber : "",
         });
 
         toast({ title: "Ride Requested!", description: "We are finding a driver for you." });
@@ -273,8 +272,8 @@ export function UserDashboard() {
           direction: editDirection,
           isRoundTrip: editIsRoundTrip,
           returnDateTime: returnDateTimeStr,
-          transportType: editTransportType,
-          transportNumber: editTransportNumber,
+          transportType: editTransportType && editTransportNumber ? editTransportType : "",
+          transportNumber: editTransportType && editTransportNumber ? editTransportNumber : "",
         });
 
         toast({ title: "Ride Updated!", description: "Your ride has been sent for re-approval." });
@@ -417,6 +416,20 @@ export function UserDashboard() {
                 <div className="space-y-2"><Label htmlFor="edit-return-time">Return Time</Label><Input id="edit-return-time" type="time" value={editReturnTime} onChange={(e) => setEditReturnTime(e.target.value)} required={editIsRoundTrip} /></div>
               </div>
             )}
+            <div className="space-y-2">
+                <Label>Transport Details (Optional)</Label>
+                <div className="p-4 border rounded-lg space-y-4">
+                <RadioGroup className="flex space-x-4" onValueChange={(value) => setEditDirection(value as Direction)} value={editDirection}>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="departure" id="edit-departure" /><Label htmlFor="edit-departure" className="font-normal">Departure</Label></div>
+                    <div className="flex items-center space-x-2"><RadioGroupItem value="arrival" id="edit-arrival" /><Label htmlFor="edit-arrival" className="font-normal">Arrival</Label></div>
+                </RadioGroup>
+                <Select onValueChange={(value) => setEditTransportType(value as TransportType)} value={editTransportType}>
+                    <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
+                    <SelectContent><SelectItem value="flight"><span className="flex items-center gap-2"><Plane /> Flight</span></SelectItem><SelectItem value="train"><span className="flex items-center gap-2"><Train /> Train</span></SelectItem><SelectItem value="bus"><span className="flex items-center gap-2"><Bus /> Bus</span></SelectItem></SelectContent>
+                </Select>
+                {editTransportType && <Input placeholder={`e.g., UA123`} value={editTransportNumber} onChange={(e) => setEditTransportNumber(e.target.value)} />}
+                </div>
+            </div>
              <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2"><BadgeDollarSign /> Fare: {isCalculatingEditFare ? <Loader2 className="animate-spin" /> : editFare !== null ? `$${editFare.toFixed(2)}` : "--"}</div>
             <DialogFooter>
               <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
