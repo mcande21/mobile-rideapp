@@ -6,11 +6,68 @@ export function calculateFare(rideDetails: Partial<Ride>): number {
   return 25.00;
 }
 
+const airportAddresses = {
+  JFK: [
+    "John F. Kennedy International Airport, Jamaica, NY 11430",
+    "JFK International Air Terminal LLC, Terminal 4, Room 161.022, Jamaica, NY 11430",
+    "JetBlue Airways, Terminal 5, JFK International Airport, Jamaica, NY 11430",
+    "JFK Expressway & South Cargo Road, Jamaica, NY 11430",
+    "Building 14, Jamaica, NY 11430",
+    "Building 77, JFK International Airport, Jamaica, NY 11430",
+    "Cargo Area D, Old Rockaway Blvd, Jamaica, NY 11430",
+    "Building 71, Cargo Area D, Old Rockaway Blvd, Jamaica, NY 11430",
+    "Cargo Building 23, JFK International Airport, Jamaica, NY 11430",
+    "Cargo Building 151, JFK International Airport, Jamaica, NY 11430",
+    "Cargo Building 86, JFK International Airport, Jamaica, NY 11430",
+  ],
+  Newark: [
+    "Newark Liberty International Airport, 3 Brewster Rd, Newark, NJ 07114",
+    "6 Earhart Dr, Newark, NJ 07114",
+    "Building 344, Brewster Road, Newark, NJ 07114",
+    "339-3 Brewster Rd, Newark, NJ 07114",
+    "Located at Newark Liberty International Airport, Newark, NJ 07114",
+  ],
+  Albany: [
+    "Albany International Airport, 737 Albany Shaker Rd, Albany, NY 12211",
+    "737 Albany-Shaker Rd, Administration Bldg, Room 200, Albany, NY 12211",
+    "16 Jetway Dr, Albany, NY 12211",
+  ],
+  Stewart: [
+    "New York Stewart International Airport, 1180 1st St, New Windsor, NY 12553",
+    "1188 1st St, New Windsor, NY 12553",
+    "1032 1st St, Building 112, New Windsor, NY 12553",
+    "3 Express Dr, Newburgh, NY 12550",
+  ],
+  Westchester: [
+    "Westchester County Airport, 240 Airport Rd, Suite 202, White Plains, NY 10604",
+    "County of Westchester, County Office Bldg, White Plains, NY 10604",
+    "1 Loop Rd, White Plains, NY 10604",
+  ],
+  Laguardia: [
+    "LaGuardia Airport, Queens, NY 11371",
+    "Ditmars Blvd, East Elmhurst, NY 11369",
+    "Hangar #7, Third Floor, Flushing, NY 11371",
+    "Hangar 7, LaGuardia Airport, Flushing, NY 11371",
+    "LaGuardia Airport, Central Terminal B, Suite CB1L-008B, Flushing, NY 11371",
+  ],
+};
+
+const trainStationAddresses = {
+  Rhinecliff: [
+    "455 Rhinecliff Road, Rhinecliff, NY 12574",
+    "Hutton & Charles St, Rhinecliff, NY 12574",
+  ],
+  Poughkeepsie: [
+    "41 Main Street, Poughkeepsie, NY 12601",
+    "32 N Water St, Poughkeepsie, NY 12601",
+  ],
+};
+
 /**
  * Calculates the fare for a trip based on the pricing logic from ajsairportruns.com.
  *
- * @param pickupLocation The starting point of the trip. (Currently unused)
- * @param dropoffLocation The destination of the trip. Used to determine ride type.
+ * @param pickupLocation The starting point of the trip.
+ * @param dropoffLocation The destination of the trip.
  * @param timeRequested The requested time for the trip.
  * @param mileage The total mileage of the trip.
  * @param isRoundTrip Whether the trip is a round trip.
@@ -26,6 +83,8 @@ export function calculateTripFare(
   // Pricing logic from https://www.ajsairportruns.com/
   const airportRates = {
     Newark: { base: 165, mileageMultiplier: 1.5 },
+    Laguardia: { base: 165, mileageMultiplier: 1.5 },
+    JFK: { base: 185, mileageMultiplier: 1.5 },
     Albany: { base: 100, mileageMultiplier: 1.5 },
     Stewart: { base: 100, mileageMultiplier: 1.5 },
     Westchester: { base: 140, mileageMultiplier: 1.5 },
@@ -40,11 +99,26 @@ export function calculateTripFare(
   let mileageMultiplier: number;
 
   const lowerCaseDropoff = dropoffLocation.toLowerCase();
-  const airportName = Object.keys(airportRates).find((name) =>
-    lowerCaseDropoff.includes(name.toLowerCase())
+  const lowerCasePickup = pickupLocation.toLowerCase();
+
+  const airportName = Object.keys(airportAddresses).find(
+    (name) =>
+      (airportAddresses[name as keyof typeof airportAddresses].includes(
+        pickupLocation
+      ) ||
+        airportAddresses[name as keyof typeof airportAddresses].includes(
+          dropoffLocation
+        ))
   );
-  const stationName = Object.keys(trainStationRates).find((name) =>
-    lowerCaseDropoff.includes(name.toLowerCase())
+
+  const stationName = Object.keys(trainStationAddresses).find(
+    (name) =>
+      (trainStationAddresses[name as keyof typeof trainStationAddresses].includes(
+        pickupLocation
+      ) ||
+        trainStationAddresses[name as keyof typeof trainStationAddresses].includes(
+          dropoffLocation
+        ))
   );
 
   if (airportName) {
@@ -57,10 +131,15 @@ export function calculateTripFare(
     mileageMultiplier = rate.mileageMultiplier;
   } else if (
     lowerCaseDropoff.includes("train station") ||
-    lowerCaseDropoff.includes("station")
+    lowerCaseDropoff.includes("station") ||
+    lowerCasePickup.includes("train station") ||
+    lowerCasePickup.includes("station")
   ) {
     mileageMultiplier = 2;
-  } else if (lowerCaseDropoff.includes("trailways")) {
+  } else if (
+    lowerCaseDropoff.includes("trailways") ||
+    lowerCasePickup.includes("trailways")
+  ) {
     mileageMultiplier = 2;
   } else if (mileage < 40) {
     mileageMultiplier = 1.8;
