@@ -38,14 +38,14 @@ export function Autocomplete<T extends FieldValues>({
           useState<google.maps.places.Autocomplete | null>(null);
 
         useEffect(() => {
-          if (places && input) {
+          if (places && input && !autocomplete) {
             const ac = new places.Autocomplete(input, {
               componentRestrictions: { country: "us" },
               fields: ["formatted_address", "name", "types"],
             });
             setAutocomplete(ac);
           }
-        }, [places, input]);
+        }, [places, input, autocomplete]);
 
         useEffect(() => {
           if (autocomplete) {
@@ -75,8 +75,8 @@ export function Autocomplete<T extends FieldValues>({
         }, [autocomplete, field.onChange]);
 
         useEffect(() => {
-          if (input && field.value !== input.value) {
-            input.value = field.value as string;
+          if (input && (field.value || "") !== input.value) {
+            input.value = (field.value || "") as string;
           }
         }, [input, field.value]);
 
