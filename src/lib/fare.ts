@@ -9,6 +9,17 @@ export function calculateFare(rideDetails: Partial<Ride>): number {
 const airportAddresses = {
   JFK: [
     "John F. Kennedy International Airport, Jamaica, NY 11430",
+    "John F. Kennedy International Airport",
+    "JFK Terminal 1, Jamaica, NY 11430, USA",
+    "JFK Terminal 2, Jamaica, NY 11430, USA",
+    "JFK Terminal 3, Jamaica, NY 11430, USA",
+    "JFK Terminal 4, Jamaica, NY 11430, USA",
+    "JFK Terminal 5, Jamaica, NY 11430, USA",
+    "JFK Terminal 6, Jamaica, NY 11430, USA",
+    "JFK Terminal 7, Jamaica, NY 11430, USA",
+    "JFK Terminal 8, Jamaica, NY 11430, USA",
+    "318 Federal Cir, Queens, NY 11430, USA",
+    "JFK Terminal 1, 500 Terminal Dr, Jamaica, NY 11430, USA",
     "JFK International Air Terminal LLC, Terminal 4, Room 161.022, Jamaica, NY 11430",
     "JetBlue Airways, Terminal 5, JFK International Airport, Jamaica, NY 11430",
     "JFK Expressway & South Cargo Road, Jamaica, NY 11430",
@@ -21,6 +32,7 @@ const airportAddresses = {
     "Cargo Building 86, JFK International Airport, Jamaica, NY 11430",
   ],
   Newark: [
+    "Newark Liberty International Airport",
     "Newark Liberty International Airport, 3 Brewster Rd, Newark, NJ 07114",
     "6 Earhart Dr, Newark, NJ 07114",
     "Building 344, Brewster Road, Newark, NJ 07114",
@@ -28,22 +40,26 @@ const airportAddresses = {
     "Located at Newark Liberty International Airport, Newark, NJ 07114",
   ],
   Albany: [
+    "Albany International Airport",
     "Albany International Airport, 737 Albany Shaker Rd, Albany, NY 12211",
     "737 Albany-Shaker Rd, Administration Bldg, Room 200, Albany, NY 12211",
     "16 Jetway Dr, Albany, NY 12211",
   ],
   Stewart: [
+    "New York Stewart International Airport",
     "New York Stewart International Airport, 1180 1st St, New Windsor, NY 12553",
     "1188 1st St, New Windsor, NY 12553",
     "1032 1st St, Building 112, New Windsor, NY 12553",
     "3 Express Dr, Newburgh, NY 12550",
   ],
   Westchester: [
+    "Westchester County Airport",
     "Westchester County Airport, 240 Airport Rd, Suite 202, White Plains, NY 10604",
     "County of Westchester, County Office Bldg, White Plains, NY 10604",
     "1 Loop Rd, White Plains, NY 10604",
   ],
   Laguardia: [
+    "LaGuardia Airport",
     "LaGuardia Airport, Queens, NY 11371",
     "Ditmars Blvd, East Elmhurst, NY 11369",
     "Hangar #7, Third Floor, Flushing, NY 11371",
@@ -58,6 +74,7 @@ const trainStationAddresses = {
     "Hutton & Charles St, Rhinecliff, NY 12574",
   ],
   Poughkeepsie: [
+    "Train station, Poughkeepsie, NY 12601, USA",
     "41 Main Street, Poughkeepsie, NY 12601",
     "32 N Water St, Poughkeepsie, NY 12601",
   ],
