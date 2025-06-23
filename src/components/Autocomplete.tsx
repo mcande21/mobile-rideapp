@@ -1,17 +1,10 @@
 "use client";
 
-import {
-  Control,
-  Controller,
-  FieldValues,
-  Path,
-  PathValue,
-} from "react-hook-form";
-import {
-  useMapsLibrary,
-} from "@vis.gl/react-google-maps";
-import { useEffect, useState } from "react";
+import { Control, FieldValues, Path, useController } from "react-hook-form";
+import { useMapsLibrary } from "@vis.gl/react-google-maps";
+import { useEffect, useRef } from "react";
 import { Input } from "./ui/input";
+import { Label } from "./ui/label";
 
 interface AutocompleteProps<T extends FieldValues> {
   control: Control<T>;
@@ -27,72 +20,66 @@ export function Autocomplete<T extends FieldValues>({
   placeholder,
 }: AutocompleteProps<T>) {
   const places = useMapsLibrary("places");
+  const inputRef = useRef<HTMLInputElement>(null);
+  
+  const { field } = useController({
+    name,
+    control,
+  });
+
+  useEffect(() => {
+    if (!places || !inputRef.current) {
+      return;
+    }
+
+    const autocomplete = new places.Autocomplete(inputRef.current, {
+      componentRestrictions: { country: "us" },
+      fields: ["formatted_address", "name", "types"],
+    });
+
+    const listener = autocomplete.addListener("place_changed", () => {
+      const place = autocomplete.getPlace();
+      if (place) {
+        let address = place.formatted_address;
+        if (
+          place.types?.some(
+            (t) =>
+              t === "airport" ||
+              t === "train_station" ||
+              t === "bus_station"
+          ) &&
+          place.name
+        ) {
+          address = place.name;
+        }
+
+        if (address) {
+          field.onChange(address);
+        }
+      }
+    });
+
+    return () => {
+      if (autocomplete) {
+        google.maps.event.clearInstanceListeners(autocomplete);
+      }
+    };
+  }, [places, field.onChange]);
 
   return (
-    <Controller
-      control={control}
-      name={name}
-      render={({ field }) => {
-        const [input, setInput] = useState<HTMLInputElement | null>(null);
-        const [autocomplete, setAutocomplete] =
-          useState<google.maps.places.Autocomplete | null>(null);
-
-        useEffect(() => {
-          if (places && input && !autocomplete) {
-            const ac = new places.Autocomplete(input, {
-              componentRestrictions: { country: "us" },
-              fields: ["formatted_address", "name", "types"],
-            });
-            setAutocomplete(ac);
-          }
-        }, [places, input, autocomplete]);
-
-        useEffect(() => {
-          if (autocomplete) {
-            const listener = autocomplete.addListener("place_changed", () => {
-              const place = autocomplete.getPlace();
-              let address = place.formatted_address;
-              if (
-                place.types?.some(
-                  (t) =>
-                    t === "airport" ||
-                    t === "train_station" ||
-                    t === "bus_station"
-                ) &&
-                place.name
-              ) {
-                address = place.name;
-              }
-
-              if (address) {
-                field.onChange(address as PathValue<T, Path<T>>);
-              }
-            });
-            return () => {
-              google.maps.event.clearInstanceListeners(autocomplete);
-            };
-          }
-        }, [autocomplete, field.onChange]);
-
-        useEffect(() => {
-          if (input && (field.value || "") !== input.value) {
-            input.value = (field.value || "") as string;
-          }
-        }, [input, field.value]);
-
-        return (
-          <div className="space-y-2">
-            <label htmlFor={name}>{label}</label>
-            <Input
-              id={name}
-              placeholder={placeholder}
-              ref={setInput}
-              onChange={(e) => field.onChange(e.target.value)}
-              defaultValue={field.value}
-            />
-          </div>
-        );
-      }}
-    />
+    <div className="space-y-2">
+      <Label htmlFor={name}>{label}</Label>
+      <Input
+        id={name}
+        placeholder={placeholder}
+        ref={(instance) => {
+          field.ref(instance);
+          (inputRef as React.MutableRefObject<HTMLInputElement | null>).current = instance;
+        }}
+        value={field.value ?? ""}
+        onChange={field.onChange}
+        onBlur={field.onBlur}
+      />
+    </div>
   );
 }
