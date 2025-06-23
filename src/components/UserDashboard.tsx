@@ -275,7 +275,7 @@ export function UserDashboard() {
                   checked={isRoundTrip}
                   onCheckedChange={setIsRoundTrip}
                 />
-                <Label htmlFor="round-trip">Round Trip</Label>
+                <Label htmlFor="round-trip">Same-Day Round-Trip</Label>
               </div>
               <div className="space-y-2">
                 <Label>Transport Details (Optional)</Label>

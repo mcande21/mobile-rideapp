@@ -205,6 +205,7 @@ export async function calculateTripFare(
   // If it's a round trip, the mileage multiplier is always 2.3, overriding other mileage rates.
   if (isRoundTrip) {
     mileageMultiplier = 2.3;
+    baseFare = 0
   }
 
   let fare = mileage * mileageMultiplier + baseFare;

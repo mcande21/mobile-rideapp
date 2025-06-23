@@ -26,6 +26,7 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [phoneNumber, setPhoneNumber] = useState("");
   const [homeAddress, setHomeAddress] = useState("");
+  const [venmoUsername, setVenmoUsername] = useState("");
   const [isSaving, setIsSaving] = useState(false);
 
   useEffect(() => {
@@ -36,6 +37,7 @@ export default function ProfilePage() {
       setName(currentUserProfile.name);
       setPhoneNumber(currentUserProfile.phoneNumber || "");
       setHomeAddress(currentUserProfile.homeAddress || "");
+      setVenmoUsername(currentUserProfile.venmoUsername || "");
     }
   }, [currentUserProfile, loading, router]);
 
@@ -47,6 +49,7 @@ export default function ProfilePage() {
         name,
         phoneNumber,
         homeAddress,
+        venmoUsername,
       });
       toast({
         title: "Profile Updated",
@@ -133,6 +136,18 @@ export default function ProfilePage() {
                 onChange={(e) => setHomeAddress(e.target.value)}
               />
             </div>
+            {currentUserProfile?.role === "driver" && (
+              <div className="space-y-2">
+                <Label htmlFor="venmo-username">Venmo Username</Label>
+                <Input
+                  id="venmo-username"
+                  type="text"
+                  placeholder="your-venmo-handle"
+                  value={venmoUsername}
+                  onChange={(e) => setVenmoUsername(e.target.value)}
+                />
+              </div>
+            )}
           </CardContent>
           <CardFooter>
             <Button className="w-full" type="submit" disabled={isSaving}>

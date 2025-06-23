@@ -10,6 +10,7 @@ export interface User {
   role: UserRole;
   phoneNumber?: string;
   homeAddress?: string;
+  venmoUsername?: string;
 }
 
 export interface Ride {
@@ -27,4 +28,9 @@ export interface Ride {
   direction?: Direction;
   duration: number; // Estimated duration in minutes
   isRoundTrip?: boolean;
+  isPaid?: boolean;
+}
+
+export interface TransportOptions {
+  // Define properties for transport options if needed
 }

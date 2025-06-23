@@ -29,6 +29,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { format } from "date-fns";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
+import { useRideStore } from "@/lib/store";
 
 interface FlightData {
   flight_status: string;
@@ -94,11 +95,34 @@ export function RideCard({
   onUpdateFare,
   showPhoneNumber,
 }: RideCardProps) {
+  const { markAsPaid, currentUserProfile } = useRideStore();
   const [isEditingFare, setIsEditingFare] = useState(false);
   const [newFare, setNewFare] = useState(ride.fare);
   const [flightData, setFlightData] = useState<FlightData | null>(null);
   const [isLoadingFlightData, setIsLoadingFlightData] = useState(false);
   const [showFlightDetails, setShowFlightDetails] = useState(false);
+
+  const isUserRide = currentUserProfile?.id === ride.user.id;
+  const showVenmoButton =
+    isUserRide &&
+    (ride.status === "accepted" || ride.status === "completed") &&
+    !ride.isPaid;
+
+  const handlePayWithVenmo = () => {
+    // In a real app, this would come from the driver's profile
+    const venmoUsername = ride.driver?.venmoUsername || "Alex-Meisler";
+    const note = `${
+      ride.user.name
+    }: From ${ride.pickup} To ${ride.dropoff} On ${format(
+      new Date(ride.dateTime),
+      "MMM d, yyyy"
+    )}`;
+    const venmoUrl = `https://venmo.com/${venmoUsername}?txn=pay&amount=${ride.fare.toFixed(
+      2
+    )}&note=${encodeURIComponent(note)}`;
+    window.open(venmoUrl, "_blank");
+    markAsPaid(ride.id);
+  };
 
   const fetchFlightData = async () => {
     if (ride.transportType === "flight" && ride.transportNumber) {
@@ -150,6 +174,11 @@ export function RideCard({
   return (
     <Card className="w-full transition-all hover:shadow-md flex flex-col">
       <CardHeader>
+        {ride.isRoundTrip && (
+          <div className="flex justify-center mb-2">
+            <Badge variant="destructive">ROUND TRIP</Badge>
+          </div>
+        )}
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
             <Avatar>
@@ -168,9 +197,22 @@ export function RideCard({
               <CardTitle className="text-lg">{ride.user.name}</CardTitle>
             </div>
           </div>
-          <Badge variant={getStatusVariant(ride.status)} className="capitalize">
-            {ride.status}
-          </Badge>
+          <div className="flex items-center gap-2">
+            {showVenmoButton && (
+              <Button
+                onClick={handlePayWithVenmo}
+                className="bg-blue-500 hover:bg-blue-600 text-white h-8"
+              >
+                Pay with Venmo
+              </Button>
+            )}
+            {ride.isPaid && (
+              <Badge className="bg-green-500 hover:bg-green-600">PAID</Badge>
+            )}
+            <Badge variant={getStatusVariant(ride.status)} className="capitalize">
+              {ride.status}
+            </Badge>
+          </div>
         </div>
       </CardHeader>
       <CardContent className="space-y-4 flex-1">
@@ -280,7 +322,9 @@ export function RideCard({
                   Est. Duration:
                 </span>
                 <span className="text-muted-foreground ml-2">
-                  {formatDuration(ride.duration)}
+                  {formatDuration(
+                    ride.isRoundTrip ? ride.duration * 2 : ride.duration
+                  )}
                 </span>
               </div>
             </div>

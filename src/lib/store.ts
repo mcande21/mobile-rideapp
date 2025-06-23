@@ -60,10 +60,12 @@ interface RideState {
   cancelRideByDriver: (id: string) => Promise<void>;
   completeRide: (id: string) => Promise<void>;
   updateRideFare: (id: string, newFare: number) => Promise<void>;
+  markAsPaid: (id: string) => Promise<void>;
   updateUserProfile: (data: {
     name: string;
     phoneNumber: string;
     homeAddress: string;
+    venmoUsername?: string;
   }) => Promise<void>;
 }
 
@@ -212,11 +214,12 @@ export const useRideStore = create<RideState>((set, get) => ({
     const rideDocRef = doc(db, "rides", id);
     await updateDoc(rideDocRef, { status: "cancelled" });
   },
-  cancelRideByDriver: async (rideId: string) => {
-    if (!db) throw new Error("Firebase not configured");
-    const rideRef = doc(db, "rides", rideId);
-    await updateDoc(rideRef, { status: "cancelled" });
+  cancelRideByDriver: async (id: string) => {
+    if (!db) return;
+    const rideRef = doc(db, "rides", id);
+    await updateDoc(rideRef, { status: "pending", driver: null });
   },
+
   completeRide: async (id: string) => {
     if (!db) throw new Error("Firebase not configured");
     const rideDocRef = doc(db, "rides", id);
@@ -227,16 +230,28 @@ export const useRideStore = create<RideState>((set, get) => ({
     const rideDocRef = doc(db, "rides", id);
     await updateDoc(rideDocRef, { fare: newFare });
   },
-  updateUserProfile: async (data) => {
+
+  markAsPaid: async (id: string) => {
+    if (!db) return;
+    const rideRef = doc(db, "rides", id);
+    await updateDoc(rideRef, { isPaid: true });
+  },
+
+  updateUserProfile: async (data: {
+    name: string;
+    phoneNumber: string;
+    homeAddress: string;
+    venmoUsername?: string;
+  }) => {
     const { currentUser, currentUserProfile } = get();
-    if (!db || !currentUser) throw new Error("User not signed in");
+    if (!db || !currentUser || !currentUserProfile) return;
 
     const userDocRef = doc(db, "users", currentUser.uid);
     await updateDoc(userDocRef, data);
 
     set({
       currentUserProfile: {
-        ...currentUserProfile!,
+        ...currentUserProfile,
         ...data,
       },
     });
