@@ -9,6 +9,7 @@ export function calculateFare(rideDetails: Partial<Ride>): number {
 const airportAddresses = {
   JFK: [
     "John F. Kennedy International Airport, Jamaica, NY 11430",
+    "John F. Kennedy International Airport (JFK), Queens, NY, USA",
     "John F. Kennedy International Airport",
     "JFK Terminal 1, Jamaica, NY 11430, USA",
     "JFK Terminal 2, Jamaica, NY 11430, USA",
@@ -33,6 +34,7 @@ const airportAddresses = {
   ],
   Newark: [
     "Newark Liberty International Airport",
+    "Newark Liberty International Airport (EWR), Newark, NJ, USA",
     "Newark Liberty International Airport, 3 Brewster Rd, Newark, NJ 07114",
     "6 Earhart Dr, Newark, NJ 07114",
     "Building 344, Brewster Road, Newark, NJ 07114",
@@ -41,24 +43,28 @@ const airportAddresses = {
   ],
   Albany: [
     "Albany International Airport",
+    "Albany International Airport (ALB), Albany Shaker Road, Albany, NY, USA",
     "Albany International Airport, 737 Albany Shaker Rd, Albany, NY 12211",
     "737 Albany-Shaker Rd, Administration Bldg, Room 200, Albany, NY 12211",
     "16 Jetway Dr, Albany, NY 12211",
   ],
   Stewart: [
     "New York Stewart International Airport",
+    "Stewart International Airport (SWF), 1st Street, New Windsor, NY, USA",
     "New York Stewart International Airport, 1180 1st St, New Windsor, NY 12553",
     "1188 1st St, New Windsor, NY 12553",
     "1032 1st St, Building 112, New Windsor, NY 12553",
     "3 Express Dr, Newburgh, NY 12550",
   ],
   Westchester: [
+    "Westchester County Airport (HPN), Airport Road, West Harrison, NY, USA",
     "Westchester County Airport",
     "Westchester County Airport, 240 Airport Rd, Suite 202, White Plains, NY 10604",
     "County of Westchester, County Office Bldg, White Plains, NY 10604",
     "1 Loop Rd, White Plains, NY 10604",
   ],
   Laguardia: [
+    "LaGuardia Airport (LGA), East Elmhurst, NY, USA",
     "LaGuardia Airport",
     "LaGuardia Airport, Queens, NY 11371",
     "Ditmars Blvd, East Elmhurst, NY 11369",
@@ -74,6 +80,7 @@ const trainStationAddresses = {
     "Hutton & Charles St, Rhinecliff, NY 12574",
   ],
   Poughkeepsie: [
+    "Poughkeepsie Train Station, Poughkeepsie, NY, USA",
     "Train station, Poughkeepsie, NY 12601, USA",
     "41 Main Street, Poughkeepsie, NY 12601",
     "32 N Water St, Poughkeepsie, NY 12601",
@@ -104,6 +111,7 @@ export async function calculateTripFare(
     body: JSON.stringify({
       origin: pickupLocation,
       destination: dropoffLocation,
+      departureTime: timeRequested.toISOString(), // Always send ISO 8601 string
     }),
   });
 
@@ -132,9 +140,6 @@ export async function calculateTripFare(
     );
   }
 
-  // Convert meters to miles
-  const mileage = directionsData.distance.value / 1609.34;
-
   // Pricing logic from https://www.ajsairportruns.com/
   const airportRates = {
     Newark: { base: 165, mileageMultiplier: 1.5 },
@@ -150,8 +155,22 @@ export async function calculateTripFare(
     Poughkeepsie: { mileageMultiplier: 1.75 },
   };
 
+  // Helper to get distance in miles from Woodstock, NY to pickup location
+  async function getDistanceFromWoodstock(pickup: string): Promise<number> {
+    const res = await fetch("/api/directions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ origin: "__WOODSTOCK__", destination: pickup }),
+    });
+    if (!res.ok) throw new Error("Failed to fetch Woodstock distance");
+    const data = await res.json();
+    if (!data.distance || typeof data.distance.value !== "number") throw new Error("No Woodstock distance");
+    return data.distance.value; // in miles
+  }
+
   let baseFare = 0;
   let mileageMultiplier: number;
+  const mileage = directionsData.distance.value
 
   const lowerCaseDropoff = dropoffLocation.toLowerCase();
   const lowerCasePickup = pickupLocation.toLowerCase();
@@ -204,12 +223,40 @@ export async function calculateTripFare(
 
   // If it's a round trip, the mileage multiplier is always 2.3
   if (isRoundTrip) {
-    // Milage multiplier is 2.3 but we want distance there and back (4.6)
-    mileageMultiplier = 4.6; 
+    mileageMultiplier = 2.3; 
     baseFare = 0
   }
 
-  let fare = mileage * mileageMultiplier + baseFare;
+  let fare: number;
+  if (airportName) {
+    // Airport ride: base + (multiplier * distance from Woodstock to pickup)
+    const rate = airportRates[airportName as keyof typeof airportRates];
+    const base = rate.base;
+    const multiplier = rate.mileageMultiplier;
+    const woodstockDistanceMeters = await getDistanceFromWoodstock(pickupLocation);
+    const woodstockDistanceMiles = woodstockDistanceMeters / 1609.34;
+    fare = base + (multiplier * woodstockDistanceMiles);
+  } else if (stationName) {
+    // Train station ride: total trip mileage * station multiplier
+    const rate = trainStationRates[stationName as keyof typeof trainStationRates];
+    const multiplier = rate.mileageMultiplier;
+    fare = (mileage / 1609.34) * multiplier;
+  } else if (mileage / 1609.34 < 40) {
+    // Local ride: (pickup -> dropoff) + (dropoff -> Woodstock)
+    const dropoffToWoodstockRes = await fetch("/api/directions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ origin: dropoffLocation, destination: "__WOODSTOCK__" }),
+    });
+    if (!dropoffToWoodstockRes.ok) throw new Error("Failed to fetch dropoff to Woodstock distance");
+    const dropoffToWoodstockData = await dropoffToWoodstockRes.json();
+    if (!dropoffToWoodstockData.distance || typeof dropoffToWoodstockData.distance.value !== "number") throw new Error("No dropoff to Woodstock distance");
+    const dropoffToWoodstockMiles = dropoffToWoodstockData.distance.value / 1609.34;
+    fare = (mileage / 1609.34 + dropoffToWoodstockMiles) * 1.8;
+  } else {
+    // One-way non-local ride: 2.3 * total trip mileage
+    fare = (mileage / 1609.34) * 2.3;
+  }
 
   // Calculate extra fees for same-day scheduling
   const now = new Date();
