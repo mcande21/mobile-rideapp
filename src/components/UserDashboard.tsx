@@ -94,6 +94,12 @@ export function UserDashboard() {
     defaultValues: { pickup: "", dropoff: "" },
   });
 
+  // --- Move these lines up so they're declared before any useEffect that uses them ---
+  const pickup = form.watch("pickup");
+  const dropoff = form.watch("dropoff");
+  const editPickup = editForm.watch("pickup");
+  const editDropoff = editForm.watch("dropoff");
+
   // New ride form state
   const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("");
@@ -115,6 +121,96 @@ export function UserDashboard() {
   const [editTransportNumber, setEditTransportNumber] = useState("");
   const [editFare, setEditFare] = useState<number | null>(null);
   const [isCalculatingEditFare, setIsCalculatingEditFare] = useState(false);
+
+  // Reschedule fee state for edit dialog
+  const [rescheduleFee, setRescheduleFee] = useState<number>(0);
+
+  // Helper: fetch reschedule fee from backend
+  async function fetchRescheduleFee({
+    pickupLocation,
+    dropoffLocation,
+    oldTime,
+    newTime,
+    mileageMeters,
+  }: {
+    pickupLocation: string;
+    dropoffLocation: string;
+    oldTime: string;
+    newTime: string;
+    mileageMeters: number;
+  }) {
+    try {
+      const res = await fetch("/api/reschedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pickupLocation,
+          dropoffLocation,
+          oldTime,
+          newTime,
+          mileageMeters,
+        }),
+      });
+      if (!res.ok) return 0;
+      const data = await res.json();
+      return data.fee || 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  // Update reschedule fee whenever edit dialog values change
+  useEffect(() => {
+    const updateRescheduleFee = async () => {
+      if (editingRide && editPickup && editDropoff && editDate && editTime) {
+        // Estimate mileage in meters (if available)
+        // If you have mileage, use it; otherwise, use 0
+        const mileageMeters = editingRide.duration ? editingRide.duration * 1609.34 / 60 : 0;
+        const oldTime = editingRide.dateTime;
+        const [hours, minutes] = editTime.split(":").map(Number);
+        const newDate = new Date(editDate);
+        newDate.setHours(hours, minutes, 0, 0);
+        const newTime = newDate.toISOString();
+        const fee = await fetchRescheduleFee({
+          pickupLocation: editPickup,
+          dropoffLocation: editDropoff,
+          oldTime,
+          newTime,
+          mileageMeters,
+        });
+        setRescheduleFee(fee);
+      } else {
+        setRescheduleFee(0);
+      }
+    };
+    updateRescheduleFee();
+  }, [editingRide, editPickup, editDropoff, editDate, editTime]);
+
+  // Helper: calculate day-of-scheduling fee for edit dialog
+  function getEditDayOfSchedulingFee(rideDate: Date) {
+    const now = new Date();
+    if (
+      now.getFullYear() === rideDate.getFullYear() &&
+      now.getMonth() === rideDate.getMonth() &&
+      now.getDate() === rideDate.getDate()
+    ) {
+      const scheduledHour = rideDate.getHours();
+      if (scheduledHour >= 7 && scheduledHour < 19) return 20;
+      if (scheduledHour >= 19 || scheduledHour < 2) return 30;
+    }
+    return 0;
+  }
+  const [editDayOfFee, setEditDayOfFee] = useState<number>(0);
+  useEffect(() => {
+    if (editDate && editTime) {
+      const [hours, minutes] = editTime.split(":").map(Number);
+      const combinedDateTime = new Date(editDate);
+      combinedDateTime.setHours(hours, minutes, 0, 0);
+      setEditDayOfFee(getEditDayOfSchedulingFee(combinedDateTime));
+    } else {
+      setEditDayOfFee(0);
+    }
+  }, [editDate, editTime]);
 
   // Helper: calculate day-of-scheduling fee (matches fare.ts logic, but uses scheduled ride time)
   function getDayOfSchedulingFee(rideDate: Date) {
@@ -149,12 +245,6 @@ export function UserDashboard() {
   useEffect(() => {
     setIsClient(true);
   }, []);
-
-  const pickup = form.watch("pickup");
-  const dropoff = form.watch("dropoff");
-
-  const editPickup = editForm.watch("pickup");
-  const editDropoff = editForm.watch("dropoff");
 
   // Fare calculation for new ride
   useEffect(() => {
@@ -346,10 +436,15 @@ export function UserDashboard() {
                 <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
                   <BadgeDollarSign /> Fare: {isCalculatingFare ? <Loader2 className="animate-spin" /> : fare !== null ? `$${(fare + dayOfFee).toFixed(2)}` : "--"}
                 </div>
-                {/* Day-of-scheduling fee breakdown */}
-                {dayOfFee > 0 && (
-                  <div className="text-xs text-muted-foreground text-center mb-2">Day-of-scheduling fee: ${dayOfFee}</div>
-                )}
+                {/* Always show fee breakdown for new ride */}
+                <div className="text-xs text-muted-foreground text-center mb-2">
+                  <div>Fare breakdown:</div>
+                  <ul className="list-disc ml-4 text-left inline-block">
+                    <li>Base fare: ${fare?.toFixed(2) ?? "--"}</li>
+                    {dayOfFee > 0 && <li>Day-of-scheduling fee: ${dayOfFee}</li>}
+                    <li className="font-semibold">Total: ${fare !== null ? (fare + dayOfFee).toFixed(2) : "--"}</li>
+                  </ul>
+                </div>
                 <Button type="submit" className="w-full transition-all" disabled={!date || !time || isSubmitting || fare === null}>{isSubmitting ? <Loader2 className="animate-spin" /> : <><Car className="mr-2" />Request Ride</>}</Button>
               </form>
             </CardContent>
@@ -435,7 +530,19 @@ export function UserDashboard() {
                 {editTransportType && <Input placeholder={`e.g., UA123`} value={editTransportNumber} onChange={(e) => setEditTransportNumber(e.target.value)} />}
                 </div>
             </div>
-             <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2"><BadgeDollarSign /> Fare: {isCalculatingEditFare ? <Loader2 className="animate-spin" /> : editFare !== null ? `$${editFare.toFixed(2)}` : "--"}</div>
+             <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
+                <BadgeDollarSign /> Fare: {isCalculatingEditFare ? <Loader2 className="animate-spin" /> : editFare !== null ? `$${(editFare + editDayOfFee + rescheduleFee).toFixed(2)}` : "--"}
+              </div>
+              {/* Always show fee breakdown for edit dialog */}
+              <div className="text-xs text-muted-foreground text-center mb-2">
+                <div>Fare breakdown:</div>
+                <ul className="list-disc ml-4 text-left inline-block">
+                  <li>Base fare: ${editFare?.toFixed(2) ?? "--"}</li>
+                  {editDayOfFee > 0 && <li>Day-of-scheduling fee: ${editDayOfFee}</li>}
+                  {rescheduleFee > 0 && <li>Reschedule fee: ${rescheduleFee}</li>}
+                  <li className="font-semibold">Total: {editFare !== null ? (editFare + editDayOfFee + rescheduleFee).toFixed(2) : "--"}</li>
+                </ul>
+              </div>
             <DialogFooter>
               <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
               <Button type="submit" disabled={isSubmitting || editFare === null}>{isSubmitting ? <Loader2 className="animate-spin" /> : <><Save className="mr-2" />Save Changes</>}</Button>
