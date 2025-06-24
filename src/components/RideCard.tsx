@@ -1,4 +1,4 @@
-import { useState, type ReactNode, useEffect } from "react";
+import { useState, type ReactNode, useEffect, useMemo } from "react";
 import {
   MapPin,
   CircleDollarSign,
@@ -101,6 +101,10 @@ export function RideCard({
   const { markAsPaid, currentUserProfile, addComment } = useRideStore();
   const [isEditingFare, setIsEditingFare] = useState(false);
   const [newFare, setNewFare] = useState(ride.fare);
+  // Fee breakdown state
+  const [rescheduleFee, setRescheduleFee] = useState<number | null>(null);
+  const [dayOfFee, setDayOfFee] = useState<number | null>(null);
+  const [showFeeBreakdown, setShowFeeBreakdown] = useState(false);
   const [flightData, setFlightData] = useState<FlightData | null>(null);
   const [isLoadingFlightData, setIsLoadingFlightData] = useState(false);
   const [showFlightDetails, setShowFlightDetails] = useState(false);
@@ -154,10 +158,58 @@ export function RideCard({
     fetchFlightData();
   }, [ride.transportType, ride.transportNumber]);
 
+  // Helper: calculate day-of-scheduling fee (client-side, matches fare.ts logic)
+  const getDayOfSchedulingFee = (rideDate: string) => {
+    const now = new Date();
+    const rideTime = new Date(rideDate);
+    if (
+      now.getFullYear() === rideTime.getFullYear() &&
+      now.getMonth() === rideTime.getMonth() &&
+      now.getDate() === rideTime.getDate()
+    ) {
+      const currentHour = now.getHours();
+      if (currentHour >= 7 && currentHour < 19) return 20;
+      if (currentHour >= 19 || currentHour < 1) return 30;
+    }
+    return 0;
+  };
+
+  // Fetch reschedule fee when editing fare
+  useEffect(() => {
+    if (isEditingFare) {
+      // Only fetch if editing and ride has been scheduled before
+      fetch("/api/reschedule", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pickupLocation: ride.pickup,
+          dropoffLocation: ride.dropoff,
+          oldTime: ride.dateTime,
+          newTime: ride.dateTime, // For now, assume same time; update as needed
+          mileageMeters: ride.duration ? ride.duration * 1609.34 / 60 : 0, // rough estimate
+        }),
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          setRescheduleFee(data.fee || 0);
+          setShowFeeBreakdown(true);
+        })
+        .catch(() => {
+          setRescheduleFee(null);
+        });
+      setDayOfFee(getDayOfSchedulingFee(ride.dateTime));
+    } else {
+      setShowFeeBreakdown(false);
+    }
+  }, [isEditingFare, ride.pickup, ride.dropoff, ride.dateTime, ride.duration]);
+
+  // Show fee breakdown after editing
   const handleSaveFare = () => {
     if (onUpdateFare) {
       onUpdateFare(ride.id, newFare);
       setIsEditingFare(false);
+      setShowFeeBreakdown(true);
+      setDayOfFee(getDayOfSchedulingFee(ride.dateTime));
     }
   };
 
@@ -302,6 +354,16 @@ export function RideCard({
             )}
           </div>
         </div>
+        {/* Fee breakdown fine print */}
+        {showFeeBreakdown && (dayOfFee || rescheduleFee) && (
+          <div className="text-xs text-muted-foreground mt-1 ml-8">
+            <div>Fare breakdown:</div>
+            <ul className="list-disc ml-4">
+              {dayOfFee ? <li>Day-of-scheduling fee: ${dayOfFee}</li> : null}
+              {rescheduleFee ? <li>Reschedule fee: ${rescheduleFee}</li> : null}
+            </ul>
+          </div>
+        )}
         <div className="border-t pt-4 mt-4 space-y-4">
           {ride.dateTime && (
             <>

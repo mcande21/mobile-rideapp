@@ -6,7 +6,7 @@ export function calculateFare(rideDetails: Partial<Ride>): number {
   return 25.00;
 }
 
-const airportAddresses = {
+export const airportAddresses = {
   JFK: [
     "John F. Kennedy International Airport, Jamaica, NY 11430",
     "John F. Kennedy International Airport (JFK), Queens, NY, USA",
@@ -229,20 +229,26 @@ export async function calculateTripFare(
 
   let fare: number;
   if (airportName) {
-    // Airport ride: base + (multiplier * distance from Woodstock to pickup)
+    // Airport ride: base + (multiplier * distance from Woodstock to the non-airport address)
     const rate = airportRates[airportName as keyof typeof airportRates];
     const base = rate.base;
     const multiplier = rate.mileageMultiplier;
-    const woodstockDistanceMeters = await getDistanceFromWoodstock(pickupLocation);
-    const woodstockDistanceMiles = woodstockDistanceMeters / 1609.34;
+    // Determine which address is NOT the airport
+    const airportAddressesList = airportAddresses[airportName as keyof typeof airportAddresses];
+    let nonAirportAddress = pickupLocation;
+    if (airportAddressesList.includes(pickupLocation)) {
+      nonAirportAddress = dropoffLocation;
+    }
+    // Get distance from Woodstock to the non-airport address
+    const woodstockDistanceMeters = await getDistanceFromWoodstock(nonAirportAddress);
+    const woodstockDistanceMiles = woodstockDistanceMeters / 1.61;
     fare = base + (multiplier * woodstockDistanceMiles);
   } else if (stationName) {
-    // Train station ride: total trip mileage * station multiplier
-    const rate = trainStationRates[stationName as keyof typeof trainStationRates];
-    const multiplier = rate.mileageMultiplier;
-    fare = (mileage / 1609.34) * multiplier;
-  } else if (mileage / 1609.34 < 40) {
-    // Local ride: (pickup -> dropoff) + (dropoff -> Woodstock)
+    // Train station ride: 1.75 * total trip mileage (pickup to dropoff)
+    const multiplier = 1.75;
+    fare = (mileage / 1.61) * multiplier;
+  } else if (mileage / 1.61 < 40) {
+    // Local ride: (pickup -> dropoff) + (dropoff -> Woodstock) * 1.8
     const dropoffToWoodstockRes = await fetch("/api/directions", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -251,11 +257,13 @@ export async function calculateTripFare(
     if (!dropoffToWoodstockRes.ok) throw new Error("Failed to fetch dropoff to Woodstock distance");
     const dropoffToWoodstockData = await dropoffToWoodstockRes.json();
     if (!dropoffToWoodstockData.distance || typeof dropoffToWoodstockData.distance.value !== "number") throw new Error("No dropoff to Woodstock distance");
-    const dropoffToWoodstockMiles = dropoffToWoodstockData.distance.value / 1609.34;
-    fare = (mileage / 1609.34 + dropoffToWoodstockMiles) * 1.8;
+    const dropoffToWoodstockMiles = dropoffToWoodstockData.distance.value / 1.61;
+    const pickupToDropoffMiles = mileage / 1.61;
+    fare = (pickupToDropoffMiles + dropoffToWoodstockMiles) * 1.8;
   } else {
-    // One-way non-local ride: 2.3 * total trip mileage
-    fare = (mileage / 1609.34) * 2.3;
+    // One-way non-local ride: total trip mileage (pickup to dropoff) * 2.3
+    const pickupToDropoffMiles = mileage / 1.61;
+    fare = pickupToDropoffMiles * 2.3;
   }
 
   // Calculate extra fees for same-day scheduling

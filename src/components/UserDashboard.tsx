@@ -116,6 +116,36 @@ export function UserDashboard() {
   const [editFare, setEditFare] = useState<number | null>(null);
   const [isCalculatingEditFare, setIsCalculatingEditFare] = useState(false);
 
+  // Helper: calculate day-of-scheduling fee (matches fare.ts logic, but uses scheduled ride time)
+  function getDayOfSchedulingFee(rideDate: Date) {
+    const now = new Date();
+    if (
+      now.getFullYear() === rideDate.getFullYear() &&
+      now.getMonth() === rideDate.getMonth() &&
+      now.getDate() === rideDate.getDate()
+    ) {
+      const scheduledHour = rideDate.getHours();
+      if (scheduledHour >= 7 && scheduledHour < 19) return 20;
+      // 7PM (19) to 1AM (1:59) should be $30
+      if (scheduledHour >= 19 || scheduledHour < 2) return 30;
+    }
+    return 0;
+  }
+
+  const [dayOfFee, setDayOfFee] = useState<number>(0);
+
+  // Update day-of-scheduling fee whenever date/time changes
+  useEffect(() => {
+    if (date && time) {
+      const [hours, minutes] = time.split(":").map(Number);
+      const combinedDateTime = new Date(date);
+      combinedDateTime.setHours(hours, minutes, 0, 0);
+      setDayOfFee(getDayOfSchedulingFee(combinedDateTime));
+    } else {
+      setDayOfFee(0);
+    }
+  }, [date, time]);
+
   useEffect(() => {
     setIsClient(true);
   }, []);
@@ -195,8 +225,9 @@ export function UserDashboard() {
         const [hours, minutes] = time.split(":").map(Number);
         const combinedDateTime = new Date(date);
         combinedDateTime.setHours(hours, minutes, 0, 0);
-
-        await addRide(values.pickup, values.dropoff, fare, {
+        const dayFee = getDayOfSchedulingFee(combinedDateTime);
+        const totalFare = fare + dayFee;
+        await addRide(values.pickup, values.dropoff, totalFare, {
           dateTime: combinedDateTime.toISOString(),
           direction,
           isRoundTrip,
@@ -206,7 +237,7 @@ export function UserDashboard() {
 
         toast({ title: "Ride Requested!", description: "We are finding a driver for you." });
         form.reset();
-        setDate(undefined); setTime(""); setIsRoundTrip(false); setDirection("departure"); setTransportType(""); setTransportNumber(""); setFare(null);
+        setDate(undefined); setTime(""); setIsRoundTrip(false); setDirection("departure"); setTransportType(""); setTransportNumber(""); setFare(null); setDayOfFee(0);
       } catch (error) {
         console.error("Error requesting ride:", error);
         toast({ title: "Error Requesting Ride", description: "There was a problem submitting your request.", variant: "destructive" });
@@ -312,7 +343,13 @@ export function UserDashboard() {
                     {transportType && <Input placeholder={`e.g., UA123`} value={transportNumber} onChange={(e) => setTransportNumber(e.target.value)} />}
                   </div>
                 </div>
-                <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2"><BadgeDollarSign /> Fare: {isCalculatingFare ? <Loader2 className="animate-spin" /> : fare !== null ? `$${fare.toFixed(2)}` : "--"}</div>
+                <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
+                  <BadgeDollarSign /> Fare: {isCalculatingFare ? <Loader2 className="animate-spin" /> : fare !== null ? `$${(fare + dayOfFee).toFixed(2)}` : "--"}
+                </div>
+                {/* Day-of-scheduling fee breakdown */}
+                {dayOfFee > 0 && (
+                  <div className="text-xs text-muted-foreground text-center mb-2">Day-of-scheduling fee: ${dayOfFee}</div>
+                )}
                 <Button type="submit" className="w-full transition-all" disabled={!date || !time || isSubmitting || fare === null}>{isSubmitting ? <Loader2 className="animate-spin" /> : <><Car className="mr-2" />Request Ride</>}</Button>
               </form>
             </CardContent>
