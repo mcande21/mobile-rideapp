@@ -532,7 +532,9 @@ export function RideCard({
           </div>
         )}
 
-        <div className="border-t pt-4 mt-4">
+        {/* Only show add comment section if ride is not completed */}
+        {ride.status !== "completed" && (
+          <div className="border-t pt-4 mt-4">
             <div className="flex items-center gap-3">
               <MessageSquare className="h-5 w-5 text-muted-foreground" />
               <p className="font-semibold text-foreground">Add a comment</p>
@@ -546,6 +548,7 @@ export function RideCard({
               <Button onClick={handleAddComment} size="sm">Post Comment</Button>
             </div>
           </div>
+        )}
 
         {ride.driver && (
           <div className="border-t pt-4 mt-4 space-y-3">

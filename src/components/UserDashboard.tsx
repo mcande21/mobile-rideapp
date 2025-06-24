@@ -100,6 +100,13 @@ export function UserDashboard() {
   const editPickup = editForm.watch("pickup");
   const editDropoff = editForm.watch("dropoff");
 
+  // New: error state for invalid date/time
+  const [dateTimeError, setDateTimeError] = useState<string>("");
+  const [editDateTimeError, setEditDateTimeError] = useState<string>("");
+
+  // New: error state for directions API
+  const [directionsError, setDirectionsError] = useState<string>("");
+
   // New ride form state
   const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("");
@@ -249,6 +256,7 @@ export function UserDashboard() {
   // Fare calculation for new ride
   useEffect(() => {
     const calculate = async () => {
+      setDirectionsError("");
       if (pickup && dropoff && date && time) {
         setIsCalculatingFare(true);
         try {
@@ -263,14 +271,25 @@ export function UserDashboard() {
             isRoundTrip
           );
           setFare(calculatedFare);
-        } catch (error) {
-          console.error("Error calculating fare:", error);
+        } catch (error: any) {
+          if (
+            error &&
+            typeof error.message === "string" &&
+            error.message.includes("No routes found")
+          ) {
+            setDirectionsError(
+              "No route could be found for the selected date and time. Please check your input"
+            );
+          } else {
+            setDirectionsError("Failed to calculate fare. Please try again.");
+          }
           setFare(null);
         } finally {
           setIsCalculatingFare(false);
         }
       } else {
         setFare(null);
+        setDirectionsError("");
       }
     };
     const handler = setTimeout(calculate, 500);
@@ -358,8 +377,9 @@ export function UserDashboard() {
         const [hours, minutes] = editTime.split(":").map(Number);
         const combinedDateTime = new Date(editDate);
         combinedDateTime.setHours(hours, minutes, 0, 0);
-
-        await updateRide(editingRide.id, values.pickup, values.dropoff, editFare, {
+        // Calculate the total adjusted fare (base + day-of + reschedule)
+        const totalAdjustedFare = (editFare ?? 0) + (editDayOfFee ?? 0) + (rescheduleFee ?? 0);
+        await updateRide(editingRide.id, values.pickup, values.dropoff, totalAdjustedFare, {
           dateTime: combinedDateTime.toISOString(),
           direction: editDirection,
           isRoundTrip: editIsRoundTrip,
@@ -433,19 +453,25 @@ export function UserDashboard() {
                     {transportType && <Input placeholder={`e.g., UA123`} value={transportNumber} onChange={(e) => setTransportNumber(e.target.value)} />}
                   </div>
                 </div>
-                <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
+                <div className="text-center text-xl font-bold text-foreground py-1 h-10 flex items-center justify-center gap-1">
                   <BadgeDollarSign /> Fare: {isCalculatingFare ? <Loader2 className="animate-spin" /> : fare !== null ? `$${(fare + dayOfFee).toFixed(2)}` : "--"}
                 </div>
                 {/* Always show fee breakdown for new ride */}
-                <div className="text-xs text-muted-foreground text-center mb-2">
-                  <div>Fare breakdown:</div>
+                <div className="text-xs text-muted-foreground text-center mb-1">
+                  <div style={{ marginBottom: 2 }}>Fare breakdown:</div>
                   <ul className="list-disc ml-4 text-left inline-block">
                     <li>Base fare: ${fare?.toFixed(2) ?? "--"}</li>
                     {dayOfFee > 0 && <li>Day-of-scheduling fee: ${dayOfFee}</li>}
                     <li className="font-semibold">Total: ${fare !== null ? (fare + dayOfFee).toFixed(2) : "--"}</li>
                   </ul>
                 </div>
-                <Button type="submit" className="w-full transition-all" disabled={!date || !time || isSubmitting || fare === null}>{isSubmitting ? <Loader2 className="animate-spin" /> : <><Car className="mr-2" />Request Ride</>}</Button>
+                {/* Error message for invalid date/time or directions */}
+                {(dateTimeError || directionsError) ? (
+                  <div className="text-xs text-red-500 text-center mb-1">
+                    {dateTimeError || directionsError}
+                  </div>
+                ) : null}
+                <Button type="submit" className="w-full transition-all" disabled={!date || !time || isSubmitting || fare === null || !!dateTimeError}>{isSubmitting ? <Loader2 className="animate-spin" /> : <><Car className="mr-2" />Request Ride</>}</Button>
               </form>
             </CardContent>
           </Card>
@@ -530,7 +556,7 @@ export function UserDashboard() {
                 {editTransportType && <Input placeholder={`e.g., UA123`} value={editTransportNumber} onChange={(e) => setEditTransportNumber(e.target.value)} />}
                 </div>
             </div>
-             <div className="text-center text-xl font-bold text-foreground py-2 h-12 flex items-center justify-center gap-2">
+             <div className="text-center text-xl font-bold text-foreground py-1 h-10 flex items-center justify-center gap-1">
                 <BadgeDollarSign /> Fare: {isCalculatingEditFare ? <Loader2 className="animate-spin" /> : editFare !== null ? `$${(editFare + editDayOfFee + rescheduleFee).toFixed(2)}` : "--"}
               </div>
               {/* Always show fee breakdown for edit dialog */}
@@ -543,9 +569,15 @@ export function UserDashboard() {
                   <li className="font-semibold">Total: {editFare !== null ? (editFare + editDayOfFee + rescheduleFee).toFixed(2) : "--"}</li>
                 </ul>
               </div>
+              {/* Error message for invalid date/time in edit dialog */}
+              {editDateTimeError && (
+                <div className="text-xs text-red-500 text-center mb-2">
+                  {editDateTimeError}
+                </div>
+              )}
             <DialogFooter>
               <DialogClose asChild><Button type="button" variant="secondary">Cancel</Button></DialogClose>
-              <Button type="submit" disabled={isSubmitting || editFare === null}>{isSubmitting ? <Loader2 className="animate-spin" /> : <><Save className="mr-2" />Save Changes</>}</Button>
+              <Button type="submit" disabled={isSubmitting || editFare === null || !!editDateTimeError}>{isSubmitting ? <Loader2 className="animate-spin" /> : <><Save className="mr-2" />Save Changes</>}</Button>
             </DialogFooter>
           </form>
         </DialogContent>
