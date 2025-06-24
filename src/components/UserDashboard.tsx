@@ -98,8 +98,6 @@ export function UserDashboard() {
   const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("");
   const [isRoundTrip, setIsRoundTrip] = useState(false);
-  const [returnDate, setReturnDate] = useState<Date | undefined>();
-  const [returnTime, setReturnTime] = useState("");
   const [direction, setDirection] = useState<Direction>("departure");
   const [transportType, setTransportType] = useState<TransportType | "">("");
   const [transportNumber, setTransportNumber] = useState("");
@@ -110,8 +108,6 @@ export function UserDashboard() {
   const [editDate, setEditDate] = useState<Date | undefined>();
   const [editTime, setEditTime] = useState("");
   const [editIsRoundTrip, setEditIsRoundTrip] = useState(false);
-  const [editReturnDate, setEditReturnDate] = useState<Date | undefined>();
-  const [editReturnTime, setEditReturnTime] = useState("");
   const [editDirection, setEditDirection] = useState<Direction>("departure");
   const [editTransportType, setEditTransportType] = useState<
     TransportType | ""
@@ -200,26 +196,17 @@ export function UserDashboard() {
         const combinedDateTime = new Date(date);
         combinedDateTime.setHours(hours, minutes, 0, 0);
 
-        let returnDateTimeStr: string | undefined;
-        if (isRoundTrip && returnDate && returnTime) {
-          const [returnHours, returnMinutes] = returnTime.split(":").map(Number);
-          const combinedReturnDateTime = new Date(returnDate);
-          combinedReturnDateTime.setHours(returnHours, returnMinutes, 0, 0);
-          returnDateTimeStr = combinedReturnDateTime.toISOString();
-        }
-
         await addRide(values.pickup, values.dropoff, fare, {
           dateTime: combinedDateTime.toISOString(),
           direction,
           isRoundTrip,
-          returnDateTime: returnDateTimeStr,
           transportType: transportType && transportNumber ? transportType : "",
           transportNumber: transportType && transportNumber ? transportNumber : "",
         });
 
         toast({ title: "Ride Requested!", description: "We are finding a driver for you." });
         form.reset();
-        setDate(undefined); setTime(""); setIsRoundTrip(false); setReturnDate(undefined); setReturnTime(""); setDirection("departure"); setTransportType(""); setTransportNumber(""); setFare(null);
+        setDate(undefined); setTime(""); setIsRoundTrip(false); setDirection("departure"); setTransportType(""); setTransportNumber(""); setFare(null);
       } catch (error) {
         console.error("Error requesting ride:", error);
         toast({ title: "Error Requesting Ride", description: "There was a problem submitting your request.", variant: "destructive" });
@@ -236,14 +223,6 @@ export function UserDashboard() {
     setEditDate(rideDate);
     setEditTime(format(rideDate, "HH:mm"));
     setEditIsRoundTrip(ride.isRoundTrip || false);
-    if (ride.isRoundTrip && ride.returnDateTime) {
-      const returnDate = parseISO(ride.returnDateTime);
-      setEditReturnDate(returnDate);
-      setEditReturnTime(format(returnDate, "HH:mm"));
-    } else {
-      setEditReturnDate(undefined);
-      setEditReturnTime("");
-    }
     setEditDirection(ride.direction || "departure");
     setEditTransportType(ride.transportType || "");
     setEditTransportNumber(ride.transportNumber || "");
@@ -259,19 +238,10 @@ export function UserDashboard() {
         const combinedDateTime = new Date(editDate);
         combinedDateTime.setHours(hours, minutes, 0, 0);
 
-        let returnDateTimeStr: string | undefined;
-        if (editIsRoundTrip && editReturnDate && editReturnTime) {
-          const [returnHours, returnMinutes] = editReturnTime.split(":").map(Number);
-          const combinedReturnDateTime = new Date(editReturnDate);
-          combinedReturnDateTime.setHours(returnHours, returnMinutes, 0, 0);
-          returnDateTimeStr = combinedReturnDateTime.toISOString();
-        }
-
         await updateRide(editingRide.id, values.pickup, values.dropoff, editFare, {
           dateTime: combinedDateTime.toISOString(),
           direction: editDirection,
           isRoundTrip: editIsRoundTrip,
-          returnDateTime: returnDateTimeStr,
           transportType: editTransportType && editTransportNumber ? editTransportType : "",
           transportNumber: editTransportType && editTransportNumber ? editTransportNumber : "",
         });
@@ -301,6 +271,7 @@ export function UserDashboard() {
   const pendingRides = userRides.filter((ride) => ride.status === "pending");
   const scheduledRides = userRides.filter((ride) => ride.status === "accepted");
   const completedRides = userRides.filter((ride) => ride.status === "completed");
+  const deniedRides = userRides.filter((ride) => ride.status === "denied");
 
   if (!isClient) {
     return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
@@ -327,12 +298,6 @@ export function UserDashboard() {
                   <div className="space-y-2"><Label htmlFor="time">Time</Label><Input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required /></div>
                 </div>
                 <div className="flex items-center space-x-2 pt-2"><Switch id="round-trip" checked={isRoundTrip} onCheckedChange={setIsRoundTrip} /><Label htmlFor="round-trip">Round Trip</Label></div>
-                {isRoundTrip && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2"><Label htmlFor="return-date">Return Date</Label><Popover><PopoverTrigger asChild><Button id="return-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !returnDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{returnDate ? format(returnDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={returnDate} onSelect={setReturnDate} initialFocus /></PopoverContent></Popover></div>
-                    <div className="space-y-2"><Label htmlFor="return-time">Return Time</Label><Input id="return-time" type="time" value={returnTime} onChange={(e) => setReturnTime(e.target.value)} required={isRoundTrip} /></div>
-                  </div>
-                )}
                 <div className="space-y-2">
                   <Label>Transport Details (Optional)</Label>
                   <div className="p-4 border rounded-lg space-y-4">
@@ -388,7 +353,16 @@ export function UserDashboard() {
               <div className="space-y-4">
                 {completedRides.map((ride) => <RideCard key={ride.id} ride={ride} />)}
               </div>
-            ) : <p className="text-muted-foreground">You have no completed rides.</p>}
+            ) : <p className="text-muted-foreground">You have no past rides.</p>}
+          </div>
+           <Separator />
+          <div>
+            <h2 className="text-2xl font-bold mb-4">Denied Rides</h2>
+            {deniedRides.length > 0 ? (
+              <div className="space-y-4">
+                {deniedRides.map((ride) => <RideCard key={ride.id} ride={ride} />)}
+              </div>
+            ) : <p className="text-muted-foreground">You have no denied rides.</p>}
           </div>
         </div>
       </div>
@@ -410,12 +384,6 @@ export function UserDashboard() {
               <div className="space-y-2"><Label htmlFor="edit-time">Time</Label><Input id="edit-time" type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} required /></div>
             </div>
             <div className="flex items-center space-x-2 pt-2"><Switch id="edit-round-trip" checked={editIsRoundTrip} onCheckedChange={setEditIsRoundTrip} /><Label htmlFor="edit-round-trip">Round Trip</Label></div>
-            {editIsRoundTrip && (
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2"><Label htmlFor="edit-return-date">Return Date</Label><Popover><PopoverTrigger asChild><Button id="edit-return-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !editReturnDate && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{editReturnDate ? format(editReturnDate, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={editReturnDate} onSelect={setEditReturnDate} initialFocus /></PopoverContent></Popover></div>
-                <div className="space-y-2"><Label htmlFor="edit-return-time">Return Time</Label><Input id="edit-return-time" type="time" value={editReturnTime} onChange={(e) => setEditReturnTime(e.target.value)} required={editIsRoundTrip} /></div>
-              </div>
-            )}
             <div className="space-y-2">
                 <Label>Transport Details (Optional)</Label>
                 <div className="p-4 border rounded-lg space-y-4">

@@ -21,11 +21,16 @@ export function Autocomplete<T extends FieldValues>({
 }: AutocompleteProps<T>) {
   const places = useMapsLibrary("places");
   const inputRef = useRef<HTMLInputElement>(null);
-  
+
   const { field } = useController({
     name,
     control,
   });
+
+  const onChangeRef = useRef(field.onChange);
+  useEffect(() => {
+    onChangeRef.current = field.onChange;
+  }, [field.onChange]);
 
   useEffect(() => {
     if (!places || !inputRef.current) {
@@ -54,7 +59,7 @@ export function Autocomplete<T extends FieldValues>({
         }
 
         if (address) {
-          field.onChange(address);
+          onChangeRef.current(address);
         }
       }
     });
@@ -64,7 +69,7 @@ export function Autocomplete<T extends FieldValues>({
         google.maps.event.clearInstanceListeners(autocomplete);
       }
     };
-  }, [places, field.onChange]);
+  }, [places]);
 
   return (
     <div className="space-y-2">

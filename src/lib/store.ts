@@ -1,7 +1,7 @@
 "use client";
 
 import { create } from "zustand";
-import type { Ride, User, TransportType, Direction, UserRole } from "./types";
+import type { Ride, User, TransportType, Direction, UserRole, Comment } from "./types";
 import { auth, db, isConfigured } from "./firebase";
 import {
   onAuthStateChanged,
@@ -27,6 +27,8 @@ import {
   serverTimestamp,
   orderBy,
   setDoc,
+  deleteField,
+  arrayUnion,
 } from "firebase/firestore";
 import { seedUsers } from "./mock-data";
 
@@ -63,7 +65,6 @@ interface RideState {
       transportNumber?: string;
       direction?: Direction;
       isRoundTrip?: boolean;
-      returnDateTime?: string;
     }
   ) => Promise<void>;
   updateRide: (
@@ -77,7 +78,6 @@ interface RideState {
       transportNumber?: string;
       direction?: Direction;
       isRoundTrip?: boolean;
-      returnDateTime?: string;
     }
   ) => Promise<void>;
   acceptRide: (id: string) => Promise<void>;
@@ -87,6 +87,11 @@ interface RideState {
   completeRide: (id: string) => Promise<void>;
   updateRideFare: (id: string, newFare: number) => Promise<void>;
   markAsPaid: (id: string) => Promise<void>;
+  addComment: (
+    rideId: string,
+    text: string,
+    user: Pick<User, "id" | "name" | "avatarUrl">
+  ) => Promise<void>;
 }
 
 export const useRideStore = create<RideState>((set, get) => ({
@@ -203,6 +208,12 @@ export const useRideStore = create<RideState>((set, get) => ({
     if (!auth) throw new Error("Firebase not configured");
     await signOut(auth);
   },
+  updateUserProfile: async (data) => {
+    const { currentUser } = get();
+    if (!db || !currentUser) throw new Error("User not logged in");
+    const userDocRef = doc(db, "users", currentUser.uid);
+    await updateDoc(userDocRef, data);
+  },
   addRide: async (
     pickup,
     dropoff,
@@ -239,6 +250,8 @@ export const useRideStore = create<RideState>((set, get) => ({
         userPayload.homeAddress = currentUserProfile.homeAddress;
       }
 
+      const { transportType, ...otherDetails } = details;
+
       const newRide: Omit<Ride, "id" | "user"> & { user: Partial<User> } = {
         user: userPayload,
         pickup,
@@ -246,11 +259,13 @@ export const useRideStore = create<RideState>((set, get) => ({
         fare,
         status: "pending",
         createdAt: serverTimestamp(),
-        ...details,
-        transportType:
-          details.transportType === "" ? undefined : details.transportType,
+        ...otherDetails,
         duration: duration || 60, // Fallback to 60 minutes
       };
+
+      if (transportType) {
+        (newRide as any).transportType = transportType;
+      }
 
       await addDoc(collection(db, "rides"), newRide);
     } catch (error) {
@@ -281,18 +296,25 @@ export const useRideStore = create<RideState>((set, get) => ({
       const { duration } = await directionsResponse.json();
 
       const rideRef = doc(db, "rides", rideId);
-      await updateDoc(rideRef, {
+      const { transportType, ...otherDetails } = details;
+      const updateData: any = {
         pickup,
         dropoff,
         fare,
-        ...details,
-        transportType:
-          details.transportType === "" ? undefined : details.transportType,
+        ...otherDetails,
         duration: duration || 60,
         status: "pending",
         driver: null,
         isRevised: true,
-      });
+      };
+
+      if (transportType) {
+        updateData.transportType = transportType;
+      } else {
+        updateData.transportType = deleteField();
+      }
+
+      await updateDoc(rideRef, updateData);
     } catch (error) {
       console.error("Error updating ride:", error);
       throw error;
@@ -325,7 +347,7 @@ export const useRideStore = create<RideState>((set, get) => ({
   rejectRide: async (id: string) => {
     if (!db) throw new Error("Firebase not configured");
     const rideDocRef = doc(db, "rides", id);
-    await deleteDoc(rideDocRef);
+    await updateDoc(rideDocRef, { status: "denied", driver: null });
   },
   cancelRide: async (id: string) => {
     if (!db) throw new Error("Firebase not configured");
@@ -354,24 +376,24 @@ export const useRideStore = create<RideState>((set, get) => ({
     const rideRef = doc(db, "rides", id);
     await updateDoc(rideRef, { isPaid: true });
   },
+  addComment: async (rideId, text, user) => {
+    if (!db) throw new Error("Firebase not configured");
+    const rideRef = doc(db, "rides", rideId);
+    const newComment: Comment = {
+      id: `${user.id}-${new Date().getTime()}`,
+      text,
+      user,
+      createdAt: new Date(),
+    };
 
-  updateUserProfile: async (data: {
-    name: string;
-    phoneNumber: string;
-    homeAddress: string;
-    venmoUsername?: string;
-  }) => {
-    const { currentUser, currentUserProfile } = get();
-    if (!db || !currentUser || !currentUserProfile) return;
-
-    const userDocRef = doc(db, "users", currentUser.uid);
-    await updateDoc(userDocRef, data);
-
-    set({
-      currentUserProfile: {
-        ...currentUserProfile,
-        ...data,
-      },
+    // Atomically add a new comment to the "comments" array field.
+    await updateDoc(rideRef, {
+      comments: arrayUnion(newComment),
     });
   },
 }));
+
+if (isConfigured) {
+  auth;
+  db;
+}

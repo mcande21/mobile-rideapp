@@ -202,9 +202,10 @@ export async function calculateTripFare(
     mileageMultiplier = 2.3;
   }
 
-  // If it's a round trip, the mileage multiplier is always 2.3, overriding other mileage rates.
+  // If it's a round trip, the mileage multiplier is always 2.3
   if (isRoundTrip) {
-    mileageMultiplier = 2.3;
+    // Milage multiplier is 2.3 but we want distance there and back (4.6)
+    mileageMultiplier = 4.6; 
     baseFare = 0
   }
 

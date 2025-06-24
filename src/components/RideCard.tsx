@@ -1,4 +1,3 @@
-
 import { useState, type ReactNode, useEffect } from "react";
 import {
   MapPin,
@@ -17,6 +16,7 @@ import {
   ChevronDown,
   ChevronUp,
   Undo2,
+  MessageSquare,
 } from "lucide-react";
 import type { Ride, TransportType } from "@/lib/types";
 import {
@@ -32,6 +32,7 @@ import { format } from "date-fns";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { useRideStore } from "@/lib/store";
+import { Textarea } from "./ui/textarea";
 
 interface FlightData {
   flight_status: string;
@@ -97,12 +98,14 @@ export function RideCard({
   onUpdateFare,
   showPhoneNumber,
 }: RideCardProps) {
-  const { markAsPaid, currentUserProfile } = useRideStore();
+  const { markAsPaid, currentUserProfile, addComment } = useRideStore();
   const [isEditingFare, setIsEditingFare] = useState(false);
   const [newFare, setNewFare] = useState(ride.fare);
   const [flightData, setFlightData] = useState<FlightData | null>(null);
   const [isLoadingFlightData, setIsLoadingFlightData] = useState(false);
   const [showFlightDetails, setShowFlightDetails] = useState(false);
+  const [showComments, setShowComments] = useState(false);
+  const [commentText, setCommentText] = useState("");
 
   const isUserRide = currentUserProfile?.id === ride.user.id;
   const showVenmoButton =
@@ -155,6 +158,21 @@ export function RideCard({
     if (onUpdateFare) {
       onUpdateFare(ride.id, newFare);
       setIsEditingFare(false);
+    }
+  };
+
+  const handleAddComment = async () => {
+    if (commentText.trim() === "" || !currentUserProfile) return;
+    try {
+      await addComment(ride.id, commentText, {
+        id: currentUserProfile.id,
+        name: currentUserProfile.name,
+        avatarUrl: currentUserProfile.avatarUrl,
+      });
+      setCommentText("");
+      setShowComments(true);
+    } catch (error) {
+      console.error("Failed to add comment", error);
     }
   };
 
@@ -429,6 +447,44 @@ export function RideCard({
               </div>
             )}
         </div>
+        {ride.comments && ride.comments.length > 0 && (
+          <div className="border-t pt-4 mt-4 space-y-3">
+            <div className="flex items-center gap-3">
+              <MessageSquare className="h-5 w-5 text-muted-foreground" />
+              <p className="font-semibold text-foreground">Comments</p>
+            </div>
+            <div className="space-y-2 pl-8">
+              {ride.comments.map((comment) => (
+                <div key={comment.id} className="flex items-start gap-2 text-sm">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={comment.user.avatarUrl} alt={comment.user.name} />
+                    <AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <span className="font-semibold">{comment.user.name}</span>
+                    <p className="text-muted-foreground">{comment.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="border-t pt-4 mt-4">
+            <div className="flex items-center gap-3">
+              <MessageSquare className="h-5 w-5 text-muted-foreground" />
+              <p className="font-semibold text-foreground">Add a comment</p>
+            </div>
+            <div className="pl-8 pt-2 space-y-2">
+              <Textarea
+                value={commentText}
+                onChange={(e) => setCommentText(e.target.value)}
+                placeholder="Type your comment here..."
+              />
+              <Button onClick={handleAddComment} size="sm">Post Comment</Button>
+            </div>
+          </div>
+
         {ride.driver && (
           <div className="border-t pt-4 mt-4 space-y-3">
             <div className="flex items-center gap-3">
