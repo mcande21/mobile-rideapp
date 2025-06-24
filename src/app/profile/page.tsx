@@ -79,22 +79,27 @@ export default function ProfilePage() {
   };
 
   const handleLinkGoogle = async () => {
-    setIsLinking(true);
     try {
-      await linkWithGoogle();
-      toast({
-        title: "Google Account Linked",
-        description: "Your account has been successfully linked with Google.",
-      });
+      if (!currentUserProfile?.id) {
+        toast({
+          title: "Error",
+          description: "No user ID found.",
+          variant: "destructive",
+        });
+        return;
+      }
+      const response = await fetch(
+        `/api/auth/google/url?userId=${currentUserProfile.id}`
+      );
+      const { url } = await response.json();
+      window.location.href = url;
     } catch (error) {
+      console.error("Error fetching Google Auth URL:", error);
       toast({
         title: "Error",
         description: "Could not link your Google account. Please try again.",
         variant: "destructive",
       });
-      console.error(error);
-    } finally {
-      setIsLinking(false);
     }
   };
 
@@ -176,7 +181,11 @@ export default function ProfilePage() {
             )}
           </CardContent>
           <CardFooter className="flex flex-col gap-2">
-            <Button className="w-full" type="submit" disabled={isSaving || isLinking}>
+            <Button
+              className="w-full"
+              type="submit"
+              disabled={isSaving || isLinking}
+            >
               {isSaving ? (
                 <Loader2 className="animate-spin" />
               ) : (
