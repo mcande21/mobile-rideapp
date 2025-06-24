@@ -1,4 +1,3 @@
-
 "use client";
 
 import { create } from "zustand";
@@ -10,6 +9,9 @@ import {
   signOut,
   createUserWithEmailAndPassword,
   type User as FirebaseUser,
+  GoogleAuthProvider,
+  signInWithPopup,
+  linkWithPopup,
 } from "firebase/auth";
 import {
   collection,
@@ -33,7 +35,7 @@ interface RideState {
   currentUser: FirebaseUser | null;
   currentUserProfile: User | null;
   loading: boolean;
-  initAuth: () => () => void;
+  error: string | null;
   login: (email: string, password: string) => Promise<void>;
   signUp: (
     name: string,
@@ -43,6 +45,14 @@ interface RideState {
     homeAddress?: string
   ) => Promise<void>;
   logout: () => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  linkWithGoogle: () => Promise<void>;
+  updateUserProfile: (data: {
+    name: string;
+    phoneNumber: string;
+    homeAddress: string;
+    venmoUsername?: string;
+  }) => Promise<void>;
   addRide: (
     pickup: string,
     dropoff: string,
@@ -77,12 +87,6 @@ interface RideState {
   completeRide: (id: string) => Promise<void>;
   updateRideFare: (id: string, newFare: number) => Promise<void>;
   markAsPaid: (id: string) => Promise<void>;
-  updateUserProfile: (data: {
-    name: string;
-    phoneNumber: string;
-    homeAddress: string;
-    venmoUsername?: string;
-  }) => Promise<void>;
 }
 
 export const useRideStore = create<RideState>((set, get) => ({
@@ -90,6 +94,7 @@ export const useRideStore = create<RideState>((set, get) => ({
   currentUser: null,
   currentUserProfile: null,
   loading: true,
+  error: null,
   initAuth: () => {
     if (!auth) {
       set({ loading: false });
@@ -150,6 +155,49 @@ export const useRideStore = create<RideState>((set, get) => ({
       phoneNumber,
       ...(homeAddress && { homeAddress }),
     });
+  },
+  signInWithGoogle: async () => {
+    if (!auth || !db) throw new Error("Firebase not configured");
+    const provider = new GoogleAuthProvider();
+    try {
+      const result = await signInWithPopup(auth, provider);
+      const user = result.user;
+
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+
+      if (!userDoc.exists()) {
+        await setDoc(doc(db, "users", user.uid), {
+          name: user.displayName || "New User",
+          role: "user",
+          avatarUrl: user.photoURL || `https://placehold.co/100x100.png`,
+        });
+      }
+    } catch (error) {
+      console.error("Error during Google sign-in:", error);
+      throw error;
+    }
+  },
+  linkWithGoogle: async () => {
+    if (!auth || !db) throw new Error("Firebase not configured");
+    const user = auth.currentUser;
+    if (!user) throw new Error("User not logged in");
+    const provider = new GoogleAuthProvider();
+    try {
+      await linkWithPopup(user, provider);
+      // Re-fetch user profile to ensure it's up-to-date
+      const userDocRef = doc(db, "users", user.uid);
+      const userDoc = await getDoc(userDocRef);
+      if (userDoc.exists()) {
+        set({
+          currentUserProfile: { id: user.uid, ...userDoc.data() } as User,
+        });
+      }
+    } catch (error) {
+      console.error("Error linking Google account:", error);
+      set({ error: "Failed to link with Google" });
+      throw error;
+    }
   },
   logout: async () => {
     if (!auth) throw new Error("Firebase not configured");

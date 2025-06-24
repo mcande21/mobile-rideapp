@@ -29,17 +29,17 @@ export default function SignUpPage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [homeAddress, setHomeAddress] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isSigningUp, setIsSigningUp] = useState(false);
+  const [authAction, setAuthAction] = useState<"" | "email">("");
 
   useEffect(() => {
-    if (!loading && currentUserProfile) {
+    if (currentUserProfile) {
       if (currentUserProfile.role === "driver") {
         router.replace("/driver");
       } else {
         router.replace("/user");
       }
     }
-  }, [currentUserProfile, loading, router]);
+  }, [currentUserProfile, router]);
 
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -48,7 +48,7 @@ export default function SignUpPage() {
       return;
     }
     setError(null);
-    setIsSigningUp(true);
+    setAuthAction("email");
     try {
       await signUp(name, email, password, phoneNumber, homeAddress);
     } catch (err: any) {
@@ -60,7 +60,7 @@ export default function SignUpPage() {
         setError("An unexpected error occurred. Please try again.");
       }
       console.error(err);
-      setIsSigningUp(false);
+      setAuthAction("");
     }
   };
 
@@ -154,8 +154,8 @@ export default function SignUpPage() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            <Button className="w-full" type="submit" disabled={isSigningUp}>
-              {isSigningUp ? (
+            <Button className="w-full" type="submit" disabled={!!authAction}>
+              {authAction === "email" ? (
                 <Loader2 className="animate-spin" />
               ) : (
                 <>
@@ -168,8 +168,11 @@ export default function SignUpPage() {
         </form>
         <CardFooter className="flex justify-center text-sm">
           <p className="text-muted-foreground">
-            Already have an account?{' '}
-            <Link href="/" className="underline text-primary hover:text-primary/80">
+            Already have an account?{" "}
+            <Link
+              href="/"
+              className="underline text-primary hover:text-primary/80"
+            >
               Sign In
             </Link>
           </p>

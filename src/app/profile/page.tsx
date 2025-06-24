@@ -18,8 +18,13 @@ import { Loader2, User, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function ProfilePage() {
-  const { currentUser, currentUserProfile, updateUserProfile, loading } =
-    useRideStore();
+  const {
+    currentUser,
+    currentUserProfile,
+    updateUserProfile,
+    loading,
+    linkWithGoogle,
+  } = useRideStore();
   const router = useRouter();
   const { toast } = useToast();
 
@@ -28,6 +33,7 @@ export default function ProfilePage() {
   const [homeAddress, setHomeAddress] = useState("");
   const [venmoUsername, setVenmoUsername] = useState("");
   const [isSaving, setIsSaving] = useState(false);
+  const [isLinking, setIsLinking] = useState(false);
 
   useEffect(() => {
     if (!loading && !currentUserProfile) {
@@ -69,6 +75,26 @@ export default function ProfilePage() {
       console.error(err);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  const handleLinkGoogle = async () => {
+    setIsLinking(true);
+    try {
+      await linkWithGoogle();
+      toast({
+        title: "Google Account Linked",
+        description: "Your account has been successfully linked with Google.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Could not link your Google account. Please try again.",
+        variant: "destructive",
+      });
+      console.error(error);
+    } finally {
+      setIsLinking(false);
     }
   };
 
@@ -149,8 +175,8 @@ export default function ProfilePage() {
               </div>
             )}
           </CardContent>
-          <CardFooter>
-            <Button className="w-full" type="submit" disabled={isSaving}>
+          <CardFooter className="flex flex-col gap-2">
+            <Button className="w-full" type="submit" disabled={isSaving || isLinking}>
               {isSaving ? (
                 <Loader2 className="animate-spin" />
               ) : (
@@ -158,6 +184,19 @@ export default function ProfilePage() {
                   <Save className="mr-2" />
                   Save Changes
                 </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              className="w-full"
+              type="button"
+              onClick={handleLinkGoogle}
+              disabled={isSaving || isLinking}
+            >
+              {isLinking ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                "Sync to Google Calendar"
               )}
             </Button>
           </CardFooter>

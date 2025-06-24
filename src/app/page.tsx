@@ -54,13 +54,13 @@ function FirebaseNotConfigured() {
 }
 
 export default function SignInPage() {
-  const { login, currentUserProfile, loading } = useRideStore();
+  const { login, currentUserProfile, loading, signInWithGoogle } = useRideStore();
   const router = useRouter();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isSigningIn, setIsSigningIn] = useState(false);
+  const [authAction, setAuthAction] = useState<"" | "email" | "google">("");
 
   useEffect(() => {
     if (!loading && currentUserProfile) {
@@ -75,13 +75,25 @@ export default function SignInPage() {
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    setIsSigningIn(true);
+    setAuthAction("email");
     try {
       await login(email, password);
-    } catch (err: any) {
+    } catch (error: any) {
       setError("Invalid email or password. Please try again.");
-      console.error(err);
-      setIsSigningIn(false);
+      console.error(error);
+      setAuthAction("");
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setError(null);
+    setAuthAction("google");
+    try {
+      await signInWithGoogle();
+    } catch (error) {
+      setError("An error occurred during Google sign-in.");
+      console.error(error);
+      setAuthAction("");
     }
   };
 
@@ -137,14 +149,37 @@ export default function SignInPage() {
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
-            <Button className="w-full" type="submit" disabled={isSigningIn}>
-              {isSigningIn ? (
+            <Button className="w-full" type="submit" disabled={!!authAction}>
+              {authAction === "email" ? (
                 <Loader2 className="animate-spin" />
               ) : (
                 <>
                   <LogIn className="mr-2" />
                   Sign In
                 </>
+              )}
+            </Button>
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <span className="w-full border-t" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-card px-2 text-muted-foreground">
+                  Or continue with
+                </span>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              type="button"
+              className="w-full"
+              onClick={handleGoogleSignIn}
+              disabled={!!authAction}
+            >
+              {authAction === "google" ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                "Sign In with Google"
               )}
             </Button>
           </CardContent>

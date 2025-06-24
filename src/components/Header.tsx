@@ -1,4 +1,3 @@
-
 "use client";
 
 import Link from "next/link";
@@ -21,8 +20,12 @@ export function Header() {
   const router = useRouter();
 
   const handleLogout = async () => {
-    await logout();
-    router.push("/");
+    try {
+      await logout();
+      router.push("/");
+    } catch (error) {
+      console.error("Failed to log out", error);
+    }
   };
 
   return (
