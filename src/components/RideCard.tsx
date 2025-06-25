@@ -34,6 +34,7 @@ import { Button } from "./ui/button";
 import { useRideStore } from "@/lib/store";
 import { Textarea } from "./ui/textarea";
 import { getAvatarUrl, getAvatarBackgroundColor, getUserInitials } from "@/lib/utils";
+import { GoogleCalendarButton } from "./GoogleCalendarButton";
 
 interface FlightData {
   flight_status: string;
@@ -301,6 +302,9 @@ export function RideCard({
               >
                 Pay with Venmo
               </Button>
+            )}
+            {ride.status === "accepted" && (
+              <GoogleCalendarButton ride={ride} />
             )}
             {ride.isPaid && (
               <Badge className="bg-green-500 hover:bg-green-600">PAID</Badge>

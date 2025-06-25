@@ -19,6 +19,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Autocomplete } from "@/components/Autocomplete";
 import { AvatarSelector } from "@/components/AvatarSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { GoogleCalendarSettings } from "@/components/GoogleCalendarSettings";
 
 export default function ProfilePage() {
   const {
@@ -146,9 +147,10 @@ export default function ProfilePage() {
     <div className="container mx-auto p-4 md:p-6 max-w-4xl">
       <div className="mt-8">
         <Tabs defaultValue="profile" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="profile">Profile Info</TabsTrigger>
             <TabsTrigger value="avatar">Avatar & Appearance</TabsTrigger>
+            <TabsTrigger value="calendar">Google Calendar</TabsTrigger>
           </TabsList>
           
           <TabsContent value="profile">
@@ -246,6 +248,10 @@ export default function ProfilePage() {
         onSelect={(avatarConfig) => setCustomAvatar(avatarConfig)}
         onSave={handleSaveAvatar}
       />
+    </TabsContent>
+    
+    <TabsContent value="calendar">
+      <GoogleCalendarSettings />
     </TabsContent>
     
     </Tabs>

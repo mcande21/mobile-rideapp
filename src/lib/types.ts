@@ -23,6 +23,8 @@ export interface User {
     accessToken: string;
     refreshToken?: string;
     expiresIn?: number;
+    selectedCalendarId?: string;
+    selectedCalendarName?: string;
   };
 }
 

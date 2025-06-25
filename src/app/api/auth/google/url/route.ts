@@ -2,8 +2,7 @@ import { NextResponse } from 'next/server';
 import { oauth2Client } from '@/lib/google';
 
 const scopes = [
-  'https://www.googleapis.com/auth/calendar.readonly',
-  'https://www.googleapis.com/auth/calendar.events',
+  'https://www.googleapis.com/auth/calendar', // Full calendar access
   'https://www.googleapis.com/auth/userinfo.profile',
   'https://www.googleapis.com/auth/userinfo.email'
 ];
