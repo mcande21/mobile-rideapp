@@ -4,6 +4,7 @@ import { Calendar, Check } from 'lucide-react';
 import type { Ride } from '@/lib/types';
 import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 import { useRideStore } from '@/lib/store';
+import { useToast } from '@/hooks/use-toast';
 
 interface GoogleCalendarButtonProps {
   ride: Ride;
@@ -15,6 +16,7 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
   const [eventAdded, setEventAdded] = useState(false);
   const [addedToCalendar, setAddedToCalendar] = useState<string | null>(null);
   const { currentUserProfile } = useRideStore();
+  const { toast } = useToast();
 
   // Check if user already has Google account connected
   useEffect(() => {
@@ -65,19 +67,26 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
       const result = await response.json();
 
       if (result.success) {
-        if (result.eventLink) {
-          window.open(result.eventLink, '_blank');
-        }
+        // Event added successfully - NO new window/tab opened
         setEventAdded(true);
         const calendarName = result.calendar?.summary || 
                             currentUserProfile?.googleAccount?.selectedCalendarName || 
                             'Google Calendar';
         setAddedToCalendar(calendarName);
-        alert(`Event added to ${calendarName}!`);
+        
+        // Show success toast instead of alert
+        toast({
+          title: "Event Added!",
+          description: `Ride event has been added to ${calendarName}`,
+        });
       } else if (result.needsReauth) {
         // Token expired, need to re-authenticate
         setAccessToken(null);
-        alert('Your Google Calendar access has expired. Please reconnect.');
+        toast({
+          title: "Authentication Required",
+          description: "Your Google Calendar access has expired. Please reconnect.",
+          variant: "destructive",
+        });
       } else {
         throw new Error(result.error || 'Failed to add event');
       }
@@ -87,9 +96,17 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
       // If token is expired, try to refresh or re-authenticate
       if (error instanceof Error && error.message.includes('401')) {
         setAccessToken(null);
-        alert('Your Google Calendar access has expired. Please reconnect.');
+        toast({
+          title: "Authentication Required",
+          description: "Your Google Calendar access has expired. Please reconnect.",
+          variant: "destructive",
+        });
       } else {
-        alert('Failed to add event to calendar. Please try again.');
+        toast({
+          title: "Error",
+          description: "Failed to add event to calendar. Please try again.",
+          variant: "destructive",
+        });
       }
     } finally {
       setIsAddingEvent(false);
