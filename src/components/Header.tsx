@@ -92,10 +92,12 @@ export function Header() {
                 className="relative h-12 w-12 rounded-full p-0 ring-2 ring-transparent hover:ring-2 hover:ring-primary/20 transition-all duration-200 hover:scale-105"
               >
                 <Avatar className="h-10 w-10 ring-2 ring-background shadow-lg">
-                  <AvatarImage
-                    src={getAvatarUrl(currentUserProfile)}
-                    alt={currentUserProfile.name}
-                  />
+                  {getAvatarUrl(currentUserProfile) && (
+                    <AvatarImage
+                      src={getAvatarUrl(currentUserProfile)}
+                      alt={currentUserProfile.name}
+                    />
+                  )}
                   <AvatarFallback 
                     style={{ backgroundColor: getAvatarBackgroundColor(currentUserProfile) }}
                     className="text-white font-semibold relative overflow-hidden border-2 border-white/20"

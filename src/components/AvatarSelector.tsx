@@ -16,15 +16,24 @@ interface AvatarSelectorProps {
 }
 
 export function AvatarSelector({ user, onSelect, onSave }: AvatarSelectorProps) {
-  const [selectedType, setSelectedType] = useState<'color' | 'preset' | 'google'>(
-    user.customAvatar?.type || 'color'
-  );
-  const [selectedValue, setSelectedValue] = useState<string>(
-    user.customAvatar?.value || AVATAR_COLORS[0]
-  );
+  // If user doesn't have Google account but has 'google' avatar type, default to 'color'
+  const initialType = user.customAvatar?.type === 'google' && !user.googleAccount 
+    ? 'color' 
+    : user.customAvatar?.type || 'color';
+  
+  const initialValue = user.customAvatar?.type === 'google' && !user.googleAccount
+    ? AVATAR_COLORS[0]
+    : user.customAvatar?.value || AVATAR_COLORS[0];
+
+  const [selectedType, setSelectedType] = useState<'color' | 'preset' | 'google'>(initialType);
+  const [selectedValue, setSelectedValue] = useState<string>(initialValue);
   const [isSaving, setIsSaving] = useState(false);
 
   const handleSelect = (type: 'color' | 'preset' | 'google', value: string) => {
+    // Prevent selecting Google avatar if user doesn't have Google account
+    if (type === 'google' && !user.googleAccount) {
+      return;
+    }
     setSelectedType(type);
     setSelectedValue(value);
     onSelect({ type, value });
@@ -66,10 +75,12 @@ export function AvatarSelector({ user, onSelect, onSave }: AvatarSelectorProps) 
         <div className="flex items-center justify-center">
           <div className="text-center space-y-2">
             <Avatar className="h-20 w-20 mx-auto">
-              <AvatarImage
-                src={getAvatarUrl(previewUser)}
-                alt={user.name}
-              />
+              {getAvatarUrl(previewUser) && (
+                <AvatarImage
+                  src={getAvatarUrl(previewUser)}
+                  alt={user.name}
+                />
+              )}
               <AvatarFallback 
                 style={{ backgroundColor: getAvatarBackgroundColor(previewUser) }}
                 className="text-white font-semibold text-xl relative overflow-hidden"
@@ -89,7 +100,7 @@ export function AvatarSelector({ user, onSelect, onSave }: AvatarSelectorProps) 
           </div>
         </div>
 
-        {/* Google Profile Picture Option */}
+        {/* Google Profile Picture Option - Only show if user has Google account */}
         {user.googleAccount?.picture && (
           <div className="space-y-3">
             <div className="flex items-center gap-2">
@@ -103,12 +114,26 @@ export function AvatarSelector({ user, onSelect, onSave }: AvatarSelectorProps) 
               onClick={() => handleSelect('google', user.googleAccount!.picture)}
             >
               <Avatar className="h-8 w-8">
-                <AvatarImage src={user.googleAccount.picture} alt="Google Profile" />
+                {user.googleAccount?.picture && (
+                  <AvatarImage src={user.googleAccount.picture} alt="Google Profile" />
+                )}
                 <AvatarFallback>{getUserInitials(user.name)}</AvatarFallback>
               </Avatar>
               Use Google Profile Picture
               {selectedType === 'google' && <Check className="h-4 w-4 ml-auto" />}
             </Button>
+          </div>
+        )}
+
+        {/* Message for users without Google account */}
+        {!user.googleAccount && (
+          <div className="p-4 bg-muted/50 rounded-lg border border-dashed">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <Image className="h-4 w-4" />
+              <p className="text-sm">
+                Connect your Google account to use your profile picture as an avatar.
+              </p>
+            </div>
           </div>
         )}
 

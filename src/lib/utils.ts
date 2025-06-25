@@ -50,23 +50,28 @@ export const AVATAR_PATTERNS = [
 
 // Function to get the best avatar URL for a user
 export function getAvatarUrl(user: User): string {
-  // Priority 1: Google profile picture if available and selected
+  // Priority 1: Google profile picture if available, selected, and user has Google account
   if (user.customAvatar?.type === 'google' && user.googleAccount?.picture) {
     return user.googleAccount.picture;
   }
   
-  // Priority 2: Custom avatar if set
+  // Priority 2: Custom preset avatar if set
   if (user.customAvatar?.type === 'preset' && user.customAvatar.value) {
     return `/patterns/${user.customAvatar.value}.svg`;
   }
   
-  // Priority 3: Google profile picture as fallback
-  if (user.googleAccount?.picture) {
+  // Priority 3: Google profile picture as fallback (if not explicitly selected but available)
+  if (user.customAvatar?.type !== 'google' && user.googleAccount?.picture) {
     return user.googleAccount.picture;
   }
   
-  // Priority 4: Original avatarUrl
-  return user.avatarUrl || '';
+  // Priority 4: Original avatarUrl only if it's not a placeholder
+  if (user.avatarUrl && !user.avatarUrl.includes('placehold.co')) {
+    return user.avatarUrl;
+  }
+  
+  // Default: Return empty string to force fallback to colored background
+  return '';
 }
 
 // Function to get avatar background color

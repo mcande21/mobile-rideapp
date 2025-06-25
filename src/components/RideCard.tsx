@@ -33,6 +33,7 @@ import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { useRideStore } from "@/lib/store";
 import { Textarea } from "./ui/textarea";
+import { getAvatarUrl, getAvatarBackgroundColor, getUserInitials } from "@/lib/utils";
 
 interface FlightData {
   flight_status: string;
@@ -119,7 +120,7 @@ export function RideCard({
     !ride.isPaid;
 
   const handlePayWithVenmo = () => {
-    // In a real app, this would come from the driver's profile
+    // Use the driver's Venmo username or fallback
     const venmoUsername = ride.driver?.venmoUsername || "Alex-Meisler";
     const note = `${
       ride.user.name
@@ -127,15 +128,18 @@ export function RideCard({
       new Date(ride.dateTime),
       "MMM d, yyyy"
     )}`;
-    const venmoUrl = `https://venmo.com/${venmoUsername}?txn=pay&amount=${ride.fare.toFixed(
+    
+    // Use the correct Venmo URL format
+    const venmoUrl = `https://venmo.com/u/${venmoUsername}?txn=pay&amount=${ride.fare.toFixed(
       2
     )}&note=${encodeURIComponent(note)}`;
+    
     window.open(venmoUrl, "_blank");
     markAsPaid(ride.id);
   };
 
   const fetchFlightData = async () => {
-    if (ride.transportType === "flight" && ride.transportNumber) {
+    if (ride.transportType === "flight" && ride.transportNumber && ride.status === "accepted") {
       setIsLoadingFlightData(true);
       try {
         const response = await fetch(
@@ -157,7 +161,7 @@ export function RideCard({
 
   useEffect(() => {
     fetchFlightData();
-  }, [ride.transportType, ride.transportNumber]);
+  }, [ride.transportType, ride.transportNumber, ride.status]);
 
   // Helper: calculate day-of-scheduling fee (client-side, matches fare.ts logic)
   const getDayOfSchedulingFee = (rideDate: string) => {
@@ -264,15 +268,25 @@ export function RideCard({
         <div className="flex justify-between items-start">
           <div className="flex items-center gap-3">
             <Avatar>
-              <AvatarImage
-                src={ride.user.avatarUrl}
-                alt={ride.user.name}
-              />
-              <AvatarFallback>
-                {ride.user.name
-                  .split(" ")
-                  .map((n) => n[0])
-                  .join("")}
+              {getAvatarUrl(ride.user) && (
+                <AvatarImage
+                  src={getAvatarUrl(ride.user)}
+                  alt={ride.user.name}
+                />
+              )}
+              <AvatarFallback 
+                style={{ backgroundColor: getAvatarBackgroundColor(ride.user) }}
+                className="text-white font-semibold relative overflow-hidden"
+              >
+                {ride.user.customAvatar?.type === 'preset' ? (
+                  <img 
+                    src={`/patterns/${ride.user.customAvatar.value}.svg`}
+                    alt="Avatar"
+                    className="w-5 h-5 object-contain"
+                  />
+                ) : (
+                  getUserInitials(ride.user.name)
+                )}
               </AvatarFallback>
             </Avatar>
             <div>
@@ -464,7 +478,7 @@ export function RideCard({
                     size="icon"
                     variant="ghost"
                     onClick={fetchFlightData}
-                    disabled={isLoadingFlightData}
+                    disabled={isLoadingFlightData || ride.status !== "accepted"}
                     className="h-8 w-8"
                   >
                     {isLoadingFlightData ? (
@@ -538,7 +552,11 @@ export function RideCard({
                 <div key={comment.id} className="flex items-start gap-2 text-sm">
                   <Avatar className="h-6 w-6">
                     <AvatarImage src={comment.user.avatarUrl} alt={comment.user.name} />
-                    <AvatarFallback>{comment.user.name.charAt(0)}</AvatarFallback>
+                    <AvatarFallback 
+                      className="text-xs font-semibold bg-muted"
+                    >
+                      {getUserInitials(comment.user.name)}
+                    </AvatarFallback>
                   </Avatar>
                   <div>
                     <span className="font-semibold">{comment.user.name}</span>
@@ -576,15 +594,25 @@ export function RideCard({
             </div>
             <div className="flex items-center gap-3 pl-8">
               <Avatar className="h-9 w-9">
-                <AvatarImage
-                  src={ride.driver.avatarUrl}
-                  alt={ride.driver.name}
-                />
-                <AvatarFallback>
-                  {ride.driver.name
-                    .split(" ")
-                    .map((n) => n[0])
-                    .join("")}
+                {getAvatarUrl(ride.driver) && (
+                  <AvatarImage
+                    src={getAvatarUrl(ride.driver)}
+                    alt={ride.driver.name}
+                  />
+                )}
+                <AvatarFallback
+                  style={{ backgroundColor: getAvatarBackgroundColor(ride.driver) }}
+                  className="text-white font-semibold relative overflow-hidden"
+                >
+                  {ride.driver.customAvatar?.type === 'preset' ? (
+                    <img 
+                      src={`/patterns/${ride.driver.customAvatar.value}.svg`}
+                      alt="Avatar"
+                      className="w-5 h-5 object-contain"
+                    />
+                  ) : (
+                    getUserInitials(ride.driver.name)
+                  )}
                 </AvatarFallback>
               </Avatar>
               <div>
