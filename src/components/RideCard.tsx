@@ -246,6 +246,22 @@ export function RideCard({
   return (
     <Card className="w-full transition-all hover:shadow-md flex flex-col">
       <CardHeader>
+        {/* Fine print for cancelled within 24 hours */}
+        {ride.status === "cancelled" && (() => {
+          const now = new Date();
+          const rideDate = new Date(ride.dateTime);
+          const diffMs = rideDate.getTime() - now.getTime();
+          const diffHours = diffMs / (1000 * 60 * 60);
+          // If ride date is in the future and was cancelled within 24 hours of ride time
+          if (diffHours <= 24 && diffHours > 0) {
+            return (
+              <div className="text-xs text-red-600 font-semibold mb-2">
+                Rides cancelled within 24 hours are subject to a full price charge.
+              </div>
+            );
+          }
+          return null;
+        })()}
         <div className="flex justify-between items-start mb-2">
            <div className="flex items-center gap-2">
             {ride.isRevised && <Badge variant="destructive">REVISED</Badge>}
@@ -400,6 +416,15 @@ export function RideCard({
               </div>
             </>
           )}
+          {ride.isRoundTrip && ride.returnTime && (
+            <div className="flex items-center gap-3 text-sm">
+              <Undo2 className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <span className="font-semibold text-foreground">Return Time:</span>
+                <span className="text-muted-foreground ml-2">{formatTimeToAMPM(`1970-01-01T${ride.returnTime}`)}</span>
+              </div>
+            </div>
+          )}
           {ride.user.phoneNumber && showPhoneNumber && (
             <div className="flex items-center gap-3 text-sm">
               <Phone className="h-5 w-5 text-muted-foreground" />
@@ -419,9 +444,10 @@ export function RideCard({
                   Est. Duration:
                 </span>
                 <span className="text-muted-foreground ml-2">
-                  {formatDuration(
-                    ride.isRoundTrip ? ride.duration * 2 : ride.duration
-                  )}
+                  {ride.isRoundTrip
+                    ? `${formatDuration(ride.duration)} / ${formatDuration(ride.duration)}`
+                    : formatDuration(ride.duration)
+                  }
                 </span>
               </div>
             </div>

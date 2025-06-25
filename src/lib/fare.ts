@@ -1,10 +1,3 @@
-import type { Ride } from "./types";
-
-// For now, this is a placeholder. In the future, you could calculate the fare
-// based on distance, time, vehicle type, etc.
-export function calculateFare(rideDetails: Partial<Ride>): number {
-  return 25.00;
-}
 
 export const airportAddresses = {
   JFK: [
@@ -134,10 +127,12 @@ export async function calculateTripFare(
 
   const directionsData = await directionsResponse.json();
 
-  if (!directionsData.distance || typeof directionsData.distance.value !== "number") {
-    throw new Error(
-      "Could not calculate distance from directions API response."
-    );
+  const mileage = directionsData.distance.value; // in miles
+
+  // If it's a round trip, disregard all other logic and return (pickup to dropoff mileage in miles) * 2.3
+  if (isRoundTrip) {
+    // multiply mileage by 2 to account for both directions
+    return (2 * mileage) * 2.3;
   }
 
   // Pricing logic from https://www.ajsairportruns.com/
@@ -170,7 +165,6 @@ export async function calculateTripFare(
 
   let baseFare = 0;
   let mileageMultiplier: number;
-  const mileage = directionsData.distance.value
 
   const lowerCaseDropoff = dropoffLocation.toLowerCase();
   const lowerCasePickup = pickupLocation.toLowerCase();
@@ -221,12 +215,6 @@ export async function calculateTripFare(
     mileageMultiplier = 2.3;
   }
 
-  // If it's a round trip, the mileage multiplier is always 2.3
-  if (isRoundTrip) {
-    mileageMultiplier = 2.3; 
-    baseFare = 0
-  }
-
   let fare: number;
   if (airportName) {
     // Airport ride: base + (multiplier * distance from Woodstock to the non-airport address)
@@ -240,14 +228,13 @@ export async function calculateTripFare(
       nonAirportAddress = dropoffLocation;
     }
     // Get distance from Woodstock to the non-airport address
-    const woodstockDistanceMeters = await getDistanceFromWoodstock(nonAirportAddress);
-    const woodstockDistanceMiles = woodstockDistanceMeters / 1.61;
+    const woodstockDistanceMiles = await getDistanceFromWoodstock(nonAirportAddress); // already in miles
     fare = base + (multiplier * woodstockDistanceMiles);
   } else if (stationName) {
     // Train station ride: 1.75 * total trip mileage (pickup to dropoff)
     const multiplier = 1.75;
-    fare = (mileage / 1.61) * multiplier;
-  } else if (mileage / 1.61 < 40) {
+    fare = mileage * multiplier;
+  } else if (mileage < 40) {
     // Local ride: (pickup -> dropoff) + (dropoff -> Woodstock) * 1.8
     const dropoffToWoodstockRes = await fetch("/api/directions", {
       method: "POST",
@@ -257,31 +244,11 @@ export async function calculateTripFare(
     if (!dropoffToWoodstockRes.ok) throw new Error("Failed to fetch dropoff to Woodstock distance");
     const dropoffToWoodstockData = await dropoffToWoodstockRes.json();
     if (!dropoffToWoodstockData.distance || typeof dropoffToWoodstockData.distance.value !== "number") throw new Error("No dropoff to Woodstock distance");
-    const dropoffToWoodstockMiles = dropoffToWoodstockData.distance.value / 1.61;
-    const pickupToDropoffMiles = mileage / 1.61;
-    fare = (pickupToDropoffMiles + dropoffToWoodstockMiles) * 1.8;
+    const dropoffToWoodstockMiles = dropoffToWoodstockData.distance.value; // already in miles
+    fare = (mileage + dropoffToWoodstockMiles) * 1.8;
   } else {
     // One-way non-local ride: total trip mileage (pickup to dropoff) * 2.3
-    const pickupToDropoffMiles = mileage / 1.61;
-    fare = pickupToDropoffMiles * 2.3;
-  }
-
-  // Calculate extra fees for same-day scheduling
-  const now = new Date();
-  // Check if the ride is requested for today
-  if (
-    now.getFullYear() === timeRequested.getFullYear() &&
-    now.getMonth() === timeRequested.getMonth() &&
-    now.getDate() === timeRequested.getDate()
-  ) {
-    const currentHour = now.getHours();
-    if (currentHour >= 7 && currentHour < 19) {
-      // Day of Scheduling 7AM-7PM: $20
-      fare += 20;
-    } else if (currentHour >= 19 || currentHour < 1) {
-      // Day of Scheduling 7PM-1AM: $30
-      fare += 30;
-    }
+    fare = mileage * 2.3;
   }
 
   return fare;

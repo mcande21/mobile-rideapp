@@ -65,6 +65,7 @@ interface RideState {
       transportNumber?: string;
       direction?: Direction;
       isRoundTrip?: boolean;
+      returnTime?: string; // Optional for round trip
     }
   ) => Promise<void>;
   updateRide: (
@@ -78,6 +79,7 @@ interface RideState {
       transportNumber?: string;
       direction?: Direction;
       isRoundTrip?: boolean;
+      returnTime?: string; // Optional for round trip
     }
   ) => Promise<void>;
   acceptRide: (id: string) => Promise<void>;
@@ -213,6 +215,22 @@ export const useRideStore = create<RideState>((set, get) => ({
     if (!db || !currentUser) throw new Error("User not logged in");
     const userDocRef = doc(db, "users", currentUser.uid);
     await updateDoc(userDocRef, data);
+    // Fetch the updated profile and update the store
+    const updatedDoc = await getDoc(userDocRef);
+    if (updatedDoc.exists()) {
+      const data = updatedDoc.data();
+      set({
+        currentUserProfile: {
+          id: currentUser.uid,
+          name: data.name || "",
+          avatarUrl: data.avatarUrl || "",
+          role: data.role || "user",
+          phoneNumber: data.phoneNumber,
+          homeAddress: data.homeAddress,
+          venmoUsername: data.venmoUsername,
+        },
+      });
+    }
   },
   addRide: async (
     pickup,
@@ -235,7 +253,7 @@ export const useRideStore = create<RideState>((set, get) => ({
       if (!directionsResponse.ok) {
         throw new Error("Failed to fetch directions");
       }
-      const { duration } = await directionsResponse.json();
+      const { durationMinutes } = await directionsResponse.json();
 
       const userPayload: Partial<User> = {
         id: currentUserProfile.id,
@@ -260,7 +278,7 @@ export const useRideStore = create<RideState>((set, get) => ({
         status: "pending",
         createdAt: serverTimestamp(),
         ...otherDetails,
-        duration: duration || 60, // Fallback to 60 minutes
+        duration: durationMinutes || 60, // Fallback to 60 minutes
       };
 
       if (transportType) {
@@ -293,27 +311,30 @@ export const useRideStore = create<RideState>((set, get) => ({
       if (!directionsResponse.ok) {
         throw new Error("Failed to fetch directions");
       }
-      const { duration } = await directionsResponse.json();
+      const { durationMinutes } = await directionsResponse.json();
 
       const rideRef = doc(db, "rides", rideId);
-      const { transportType, ...otherDetails } = details;
+      // Accept returnTime as an extra property if present
       const updateData: any = {
         pickup,
         dropoff,
         fare,
-        ...otherDetails,
-        duration: duration || 60,
+        ...details,
+        duration: durationMinutes || 60,
         status: "pending",
         driver: null,
         isRevised: true,
       };
-
-      if (transportType) {
-        updateData.transportType = transportType;
+      if (details.transportType) {
+        updateData.transportType = details.transportType;
       } else {
         updateData.transportType = deleteField();
       }
-
+      if (details.isRoundTrip && (details as any).returnTime) {
+        updateData.returnTime = (details as any).returnTime;
+      } else {
+        updateData.returnTime = deleteField();
+      }
       await updateDoc(rideRef, updateData);
     } catch (error) {
       console.error("Error updating ride:", error);

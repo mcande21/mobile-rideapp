@@ -31,6 +31,7 @@ export interface Ride {
   createdAt: any; // The time the request was made
   dateTime: string; // ISO string for the ride's scheduled date and time
   returnDateTime?: string;
+  returnTime?: string; // Added for round trip return time (HH:mm)
   transportType?: TransportType;
   transportNumber?: string;
   direction?: Direction;

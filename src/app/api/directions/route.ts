@@ -88,6 +88,7 @@ export async function POST(req: Request) {
       }
       return NextResponse.json({
         duration: durationText,
+        durationMinutes: totalMinutes,
         distance: miles !== null ? { value: miles, text: `${miles.toFixed(1)} mi` } : null,
         polyline: route.polyline?.encodedPolyline || null,
         raw: {

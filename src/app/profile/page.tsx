@@ -16,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, User, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { Autocomplete } from "@/components/Autocomplete";
 
 export default function ProfilePage() {
   const {
@@ -159,12 +160,14 @@ export default function ProfilePage() {
             </div>
             <div className="space-y-2">
               <Label htmlFor="home-address">Home Address (Optional)</Label>
-              <Input
-                id="home-address"
-                type="text"
+              <Autocomplete
+                control={null as any} // Not using react-hook-form, so pass dummy
+                name="homeAddress"
+                label="Home Address (Optional)"
                 placeholder="123 Main St, Anytown"
+                // Use value/onChange to sync with local state
                 value={homeAddress}
-                onChange={(e) => setHomeAddress(e.target.value)}
+                onChange={setHomeAddress}
               />
             </div>
             {currentUserProfile?.role === "driver" && (

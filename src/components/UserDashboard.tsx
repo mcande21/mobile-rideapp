@@ -110,6 +110,7 @@ export function UserDashboard() {
   // New ride form state
   const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("");
+  const [returnTime, setReturnTime] = useState("");
   const [isRoundTrip, setIsRoundTrip] = useState(false);
   const [direction, setDirection] = useState<Direction>("departure");
   const [transportType, setTransportType] = useState<TransportType | "">("");
@@ -120,6 +121,7 @@ export function UserDashboard() {
   // Edit ride form state
   const [editDate, setEditDate] = useState<Date | undefined>();
   const [editTime, setEditTime] = useState("");
+  const [editReturnTime, setEditReturnTime] = useState("");
   const [editIsRoundTrip, setEditIsRoundTrip] = useState(false);
   const [editDirection, setEditDirection] = useState<Direction>("departure");
   const [editTransportType, setEditTransportType] = useState<
@@ -131,6 +133,25 @@ export function UserDashboard() {
 
   // Reschedule fee state for edit dialog
   const [rescheduleFee, setRescheduleFee] = useState<number>(0);
+
+  // --- Return time validation for new ride form ---
+  const [returnTimeError, setReturnTimeError] = useState<string>("");
+  useEffect(() => {
+    if (isRoundTrip && time && returnTime) {
+      // Parse both times as today (date doesn't matter for diff)
+      const [h1, m1] = time.split(":").map(Number);
+      const [h2, m2] = returnTime.split(":").map(Number);
+      let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+      if (diff < 0) diff += 24 * 60; // handle overnight return
+      if (diff > 600) {
+        setReturnTimeError("Return time must be within 10 hours of your initial time.");
+      } else {
+        setReturnTimeError("");
+      }
+    } else {
+      setReturnTimeError("");
+    }
+  }, [isRoundTrip, time, returnTime]);
 
   // Helper: fetch reschedule fee from backend
   async function fetchRescheduleFee({
@@ -342,11 +363,12 @@ export function UserDashboard() {
           isRoundTrip,
           transportType: transportType && transportNumber ? transportType : "",
           transportNumber: transportType && transportNumber ? transportNumber : "",
+          ...(isRoundTrip && returnTime ? { returnTime } : {}),
         });
 
         toast({ title: "Ride Requested!", description: "We are finding a driver for you." });
         form.reset();
-        setDate(undefined); setTime(""); setIsRoundTrip(false); setDirection("departure"); setTransportType(""); setTransportNumber(""); setFare(null); setDayOfFee(0);
+        setDate(undefined); setTime(""); setReturnTime(""); setIsRoundTrip(false); setDirection("departure"); setTransportType(""); setTransportNumber(""); setFare(null); setDayOfFee(0);
       } catch (error) {
         console.error("Error requesting ride:", error);
         toast({ title: "Error Requesting Ride", description: "There was a problem submitting your request.", variant: "destructive" });
@@ -362,6 +384,7 @@ export function UserDashboard() {
     const rideDate = parseISO(ride.dateTime);
     setEditDate(rideDate);
     setEditTime(format(rideDate, "HH:mm"));
+    setEditReturnTime(ride.returnTime || "");
     setEditIsRoundTrip(ride.isRoundTrip || false);
     setEditDirection(ride.direction || "departure");
     setEditTransportType(ride.transportType || "");
@@ -379,13 +402,20 @@ export function UserDashboard() {
         combinedDateTime.setHours(hours, minutes, 0, 0);
         // Calculate the total adjusted fare (base + day-of + reschedule)
         const totalAdjustedFare = (editFare ?? 0) + (editDayOfFee ?? 0) + (rescheduleFee ?? 0);
-        await updateRide(editingRide.id, values.pickup, values.dropoff, totalAdjustedFare, {
-          dateTime: combinedDateTime.toISOString(),
-          direction: editDirection,
-          isRoundTrip: editIsRoundTrip,
-          transportType: editTransportType && editTransportNumber ? editTransportType : "",
-          transportNumber: editTransportType && editTransportNumber ? editTransportNumber : "",
-        });
+        await updateRide(
+          editingRide.id,
+          values.pickup,
+          values.dropoff,
+          totalAdjustedFare,
+          {
+            dateTime: combinedDateTime.toISOString(),
+            direction: editDirection,
+            isRoundTrip: editIsRoundTrip,
+            transportType: editTransportType && editTransportNumber ? editTransportType : "",
+            transportNumber: editTransportType && editTransportNumber ? editTransportNumber : "",
+            returnTime: editIsRoundTrip ? editReturnTime : undefined,
+          }
+        );
 
         toast({ title: "Ride Updated!", description: "Your ride has been sent for re-approval." });
         setIsEditDialogOpen(false);
@@ -399,8 +429,38 @@ export function UserDashboard() {
     }
   };
 
-  const handleCancelRide = async (id: string) => {
+  const handleCancelRide = async (id: string, rideDateTime?: string) => {
     try {
+      // Find the ride by id to get current values
+      const ride = rides.find(r => r.id === id);
+      if (!ride) throw new Error("Ride not found");
+      if (rideDateTime) {
+        const now = new Date();
+        const rideDate = new Date(rideDateTime);
+        const diffMs = rideDate.getTime() - now.getTime();
+        const diffHours = diffMs / (1000 * 60 * 60);
+        if (diffHours <= 24) {
+          // Mark as cancelled, do not delete
+          await updateRide(
+            id,
+            ride.pickup,
+            ride.dropoff,
+            ride.fare,
+            {
+              dateTime: ride.dateTime,
+              transportType: ride.transportType || "",
+              transportNumber: ride.transportNumber,
+              direction: ride.direction,
+              isRoundTrip: ride.isRoundTrip,
+              returnTime: ride.isRoundTrip ? ride.returnTime : undefined,
+            }
+          );
+          await cancelRide(id);
+          toast({ title: "Ride Cancelled", description: "Your ride has been cancelled. Rides cancelled within 24 hours are subject to a full price charge.", variant: "destructive" });
+          return;
+        }
+      }
+      // Default: just mark as cancelled
       await cancelRide(id);
       toast({ title: "Ride Cancelled", description: "Your ride has been successfully cancelled.", variant: "destructive" });
     } catch (error) {
@@ -438,7 +498,27 @@ export function UserDashboard() {
                   </div>
                   <div className="space-y-2"><Label htmlFor="time">Time</Label><Input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required /></div>
                 </div>
-                <div className="flex items-center space-x-2 pt-2"><Switch id="round-trip" checked={isRoundTrip} onCheckedChange={setIsRoundTrip} /><Label htmlFor="round-trip">Round Trip</Label></div>
+                <div className="flex items-center space-x-2 pt-2">
+                  <Switch id="round-trip" checked={isRoundTrip} onCheckedChange={setIsRoundTrip} />
+                  <Label htmlFor="round-trip">Round Trip</Label>
+                    {isRoundTrip && (
+                    <div className="space-y-2">
+                      <Input
+                      id="return-time"
+                      type="time"
+                      value={returnTime}
+                      onChange={e => setReturnTime(e.target.value)}
+                      required
+                      min={time}
+                      />
+                    </div>
+                    )}
+                </div>
+                {isRoundTrip && (
+                  <div className={`text-xs mb-2 ${returnTimeError ? "text-red-500" : "text-muted-foreground"}`}>
+                    Return time must be within 10 hours of your initial time.
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label>Transport Details (Optional)</Label>
                   <div className="p-4 border rounded-lg space-y-4">
@@ -471,7 +551,7 @@ export function UserDashboard() {
                     {dateTimeError || directionsError}
                   </div>
                 ) : null}
-                <Button type="submit" className="w-full transition-all" disabled={!date || !time || isSubmitting || fare === null || !!dateTimeError}>{isSubmitting ? <Loader2 className="animate-spin" /> : <><Car className="mr-2" />Request Ride</>}</Button>
+                <Button type="submit" className="w-full transition-all" disabled={!date || !time || isSubmitting || fare === null || !!dateTimeError || !!returnTimeError}>{isSubmitting ? <Loader2 className="animate-spin" /> : <><Car className="mr-2" />Request Ride</>}</Button>
               </form>
             </CardContent>
           </Card>
@@ -487,7 +567,7 @@ export function UserDashboard() {
                     <AlertDialog><AlertDialogTrigger asChild><Button variant="destructive">Cancel Ride</Button></AlertDialogTrigger>
                       <AlertDialogContent>
                         <AlertDialogHeader><AlertDialogTitle>Are you sure you want to cancel?</AlertDialogTitle><AlertDialogDescription>A cancellation fee may apply. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>Keep Ride</AlertDialogCancel><AlertDialogAction onClick={() => handleCancelRide(ride.id)}>Confirm Cancellation</AlertDialogAction></AlertDialogFooter>
+                        <AlertDialogFooter><AlertDialogCancel>Keep Ride</AlertDialogCancel><AlertDialogAction onClick={() => handleCancelRide(ride.id, ride.dateTime)}>Confirm Cancellation</AlertDialogAction></AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </RideCard>
@@ -500,7 +580,27 @@ export function UserDashboard() {
             <h2 className="text-2xl font-bold mb-4">Pending Requests</h2>
             {pendingRides.length > 0 ? (
               <div className="space-y-4">
-                {pendingRides.map((ride) => <RideCard key={ride.id} ride={ride} />)}
+                {pendingRides.map((ride) => (
+                  <RideCard key={ride.id} ride={ride}>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="destructive">Cancel Ride</Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Are you sure you want to cancel?</AlertDialogTitle>
+                          <AlertDialogDescription>A cancellation fee may apply. This action cannot be undone.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Keep Ride</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => handleCancelRide(ride.id)}>
+                            Confirm Cancellation
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </RideCard>
+                ))}
               </div>
             ) : <p className="text-muted-foreground">You have no pending ride requests.</p>}
           </div>
@@ -541,7 +641,29 @@ export function UserDashboard() {
               </div>
               <div className="space-y-2"><Label htmlFor="edit-time">Time</Label><Input id="edit-time" type="time" value={editTime} onChange={(e) => setEditTime(e.target.value)} required /></div>
             </div>
-            <div className="flex items-center space-x-2 pt-2"><Switch id="edit-round-trip" checked={editIsRoundTrip} onCheckedChange={setEditIsRoundTrip} /><Label htmlFor="edit-round-trip">Round Trip</Label></div>
+            <div className="flex items-center space-x-2 pt-2">
+              <Switch id="edit-round-trip" checked={editIsRoundTrip} onCheckedChange={setEditIsRoundTrip} />
+              <Label htmlFor="edit-round-trip">Round Trip</Label>
+              {editIsRoundTrip && (
+                <>
+                  <Label htmlFor="edit-return-time" className="ml-4">Return Time</Label>
+                  <Input
+                    id="edit-return-time"
+                    type="time"
+                    className="ml-2 w-32"
+                    value={editReturnTime}
+                    onChange={e => setEditReturnTime(e.target.value)}
+                    required
+                    min={editTime}
+                  />
+                </>
+              )}
+            </div>
+            {editIsRoundTrip && (
+              <div className="text-xs text-muted-foreground mb-2">
+                If round trip is selected, you must choose a return time within 10 hours of your pickup time.
+              </div>
+            )}
             <div className="space-y-2">
                 <Label>Transport Details (Optional)</Label>
                 <div className="p-4 border rounded-lg space-y-4">

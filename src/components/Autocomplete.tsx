@@ -6,10 +6,12 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 
 interface AutocompleteProps<T extends FieldValues> {
-  control: Control<T>;
-  name: Path<T>;
+  control?: Control<T>;
+  name?: Path<T>;
   label: string;
   placeholder: string;
+  value?: string;
+  onChange?: (value: string) => void;
 }
 
 export function Autocomplete<T extends FieldValues>({
@@ -17,13 +19,12 @@ export function Autocomplete<T extends FieldValues>({
   name,
   label,
   placeholder,
+  value: propValue,
+  onChange: propOnChange,
 }: AutocompleteProps<T>) {
   const inputRef = useRef<HTMLInputElement>(null);
-  const { field } = useController({
-    name,
-    control,
-  });
-  // Update the suggestion type to match the API response
+  // Only use useController if control and name are provided
+  const { field } = control && name ? useController({ name, control }) : { field: undefined };
   const [suggestions, setSuggestions] = useState<{ text: { text: string; matches: any[] }; placeId: string }[]>([]);
 
   const fetchSuggestions = async (input: string) => {
@@ -43,19 +44,36 @@ export function Autocomplete<T extends FieldValues>({
     }
   };
 
+  // Determine value and onChange based on mode
+  const value = field ? field.value : propValue ?? "";
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (field) {
+      field.onChange(e);
+      fetchSuggestions(e.target.value);
+    } else if (propOnChange) {
+      propOnChange(e.target.value);
+      fetchSuggestions(e.target.value);
+    }
+  };
+  const handleSelect = (text: string) => {
+    if (field) {
+      field.onChange(text);
+    } else if (propOnChange) {
+      propOnChange(text);
+    }
+    setSuggestions([]);
+  };
+
   return (
     <div className="space-y-2 relative">
-      <Label htmlFor={name}>{label}</Label>
+      <Label htmlFor={name || label}>{label}</Label>
       <Input
-        id={name}
+        id={name || label}
         placeholder={placeholder}
         ref={inputRef}
-        value={field.value ?? ""}
-        onChange={e => {
-          field.onChange(e);
-          fetchSuggestions(e.target.value);
-        }}
-        onBlur={field.onBlur}
+        value={value}
+        onChange={handleChange}
+        onBlur={field ? field.onBlur : undefined}
         autoComplete="off"
       />
       {suggestions.length > 0 && (
@@ -64,10 +82,7 @@ export function Autocomplete<T extends FieldValues>({
             <li
               key={suggestion.placeId}
               className="px-4 py-2 cursor-pointer hover:bg-gray-100"
-              onMouseDown={() => {
-                field.onChange(suggestion.text.text);
-                setSuggestions([]);
-              }}
+              onMouseDown={() => handleSelect(suggestion.text.text)}
             >
               {suggestion.text.text}
             </li>
