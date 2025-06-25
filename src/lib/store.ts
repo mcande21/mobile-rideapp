@@ -38,6 +38,7 @@ interface RideState {
   currentUserProfile: User | null;
   loading: boolean;
   error: string | null;
+  initAuth: () => (() => void) | void;
   login: (email: string, password: string) => Promise<void>;
   signUp: (
     name: string,
@@ -84,7 +85,7 @@ interface RideState {
   ) => Promise<void>;
   acceptRide: (id: string) => Promise<void>;
   rejectRide: (id: string) => Promise<void>;
-  cancelRide: (id: string) => Promise<void>;
+  cancelRide: (id: string) => Promise<boolean>;
   cancelRideByDriver: (id: string) => Promise<void>;
   completeRide: (id: string) => Promise<void>;
   updateRideFare: (id: string, newFare: number) => Promise<void>;
@@ -370,10 +371,28 @@ export const useRideStore = create<RideState>((set, get) => ({
     const rideDocRef = doc(db, "rides", id);
     await updateDoc(rideDocRef, { status: "denied", driver: null });
   },
-  cancelRide: async (id: string) => {
+  cancelRide: async (id: string): Promise<boolean> => {
     if (!db) throw new Error("Firebase not configured");
     const rideDocRef = doc(db, "rides", id);
-    await updateDoc(rideDocRef, { status: "cancelled" });
+    const rideDoc = await getDoc(rideDocRef);
+    if (!rideDoc.exists()) {
+      throw new Error("Ride not found");
+    }
+    const ride = rideDoc.data() as Ride;
+    const now = new Date();
+    const rideDate = new Date(ride.dateTime);
+    const diffMs = rideDate.getTime() - now.getTime();
+    const diffHours = diffMs / (1000 * 60 * 60);
+
+    const isLateCancellation = diffHours <= 24 && diffHours > 0;
+
+    await updateDoc(rideDocRef, {
+      status: "cancelled",
+      cancelledAt: serverTimestamp(),
+      cancellationFeeApplied: isLateCancellation,
+    });
+
+    return isLateCancellation;
   },
   cancelRideByDriver: async (id: string) => {
     if (!db) return;
@@ -384,6 +403,19 @@ export const useRideStore = create<RideState>((set, get) => ({
   completeRide: async (id: string) => {
     if (!db) throw new Error("Firebase not configured");
     const rideDocRef = doc(db, "rides", id);
+    
+    // Check if this is a cancelled ride with fee applied
+    const rideDoc = await getDoc(rideDocRef);
+    if (rideDoc.exists()) {
+      const ride = rideDoc.data() as Ride;
+      if (ride.status === "cancelled" && ride.cancellationFeeApplied) {
+        // Delete the ride completely from the database
+        await deleteDoc(rideDocRef);
+        return;
+      }
+    }
+    
+    // For normal rides, just mark as completed
     await updateDoc(rideDocRef, { status: "completed" });
   },
   updateRideFare: async (id: string, newFare: number) => {

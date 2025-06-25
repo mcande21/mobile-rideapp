@@ -80,11 +80,23 @@ export function DriverDashboard() {
 
   const handleCompleteRide = async (id: string) => {
     try {
+      // Check if this is a cancelled ride with fee applied
+      const ride = rides.find(r => r.id === id);
+      const isCancelledWithFee = ride?.status === "cancelled" && ride?.cancellationFeeApplied;
+      
       await completeRide(id);
-      toast({
-        title: "Ride Completed!",
-        description: "The ride has been marked as completed.",
-      });
+      
+      if (isCancelledWithFee) {
+        toast({
+          title: "Ride Completed & Removed!",
+          description: "The cancelled ride has been finalized and removed from the system.",
+        });
+      } else {
+        toast({
+          title: "Ride Completed!",
+          description: "The ride has been marked as completed.",
+        });
+      }
     } catch (error) {
       toast({
         title: "Error",
@@ -112,6 +124,9 @@ export function DriverDashboard() {
 
   const newRequests = rides.filter((ride) => ride.status === "pending");
   const acceptedRides = rides.filter((ride) => ride.status === "accepted");
+  const cancelledRidesWithFee = rides.filter((ride) => 
+    ride.status === "cancelled" && ride.cancellationFeeApplied
+  );
   const completedRides = rides.filter((ride) => ride.status === "completed");
 
   if (!isClient) {
@@ -205,6 +220,36 @@ export function DriverDashboard() {
           </div>
         ) : (
           <p className="text-muted-foreground">You have no accepted rides.</p>
+        )}
+      </div>
+
+      <Separator />
+
+      <div>
+        <h2 className="text-3xl font-bold mb-4">Cancelled Rides (Fee Applied)</h2>
+        <p className="text-muted-foreground mb-4">
+          Rides cancelled within 24 hours. Complete these to finalize payment and remove from system.
+        </p>
+        {cancelledRidesWithFee.length > 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {cancelledRidesWithFee.map((ride) => (
+              <RideCard
+                key={ride.id}
+                ride={ride}
+                onUpdateFare={handleUpdateFare}
+                showPhoneNumber={true}
+              >
+                <Button 
+                  onClick={() => handleCompleteRide(ride.id)} 
+                  className="bg-green-500 hover:bg-green-600 text-white"
+                >
+                  Complete & Remove
+                </Button>
+              </RideCard>
+            ))}
+          </div>
+        ) : (
+          <p className="text-muted-foreground">No cancelled rides with fees.</p>
         )}
       </div>
 

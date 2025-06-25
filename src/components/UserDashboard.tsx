@@ -429,40 +429,23 @@ export function UserDashboard() {
     }
   };
 
-  const handleCancelRide = async (id: string, rideDateTime?: string) => {
+  const handleCancelRide = async (id: string) => {
     try {
-      // Find the ride by id to get current values
-      const ride = rides.find(r => r.id === id);
-      if (!ride) throw new Error("Ride not found");
-      if (rideDateTime) {
-        const now = new Date();
-        const rideDate = new Date(rideDateTime);
-        const diffMs = rideDate.getTime() - now.getTime();
-        const diffHours = diffMs / (1000 * 60 * 60);
-        if (diffHours <= 24) {
-          // Mark as cancelled, do not delete
-          await updateRide(
-            id,
-            ride.pickup,
-            ride.dropoff,
-            ride.fare,
-            {
-              dateTime: ride.dateTime,
-              transportType: ride.transportType || "",
-              transportNumber: ride.transportNumber,
-              direction: ride.direction,
-              isRoundTrip: ride.isRoundTrip,
-              returnTime: ride.isRoundTrip ? ride.returnTime : undefined,
-            }
-          );
-          await cancelRide(id);
-          toast({ title: "Ride Cancelled", description: "Your ride has been cancelled. Rides cancelled within 24 hours are subject to a full price charge.", variant: "destructive" });
-          return;
-        }
+      const isLateCancellation = await cancelRide(id);
+      
+      if (isLateCancellation) {
+        toast({ 
+          title: "Ride Cancelled", 
+          description: "Your ride has been cancelled. Rides cancelled within 24 hours are subject to a full price charge.", 
+          variant: "destructive" 
+        });
+      } else {
+        toast({ 
+          title: "Ride Cancelled", 
+          description: "Your ride has been successfully cancelled.", 
+          variant: "destructive" 
+        });
       }
-      // Default: just mark as cancelled
-      await cancelRide(id);
-      toast({ title: "Ride Cancelled", description: "Your ride has been successfully cancelled.", variant: "destructive" });
     } catch (error) {
       toast({ title: "Error", description: "Could not cancel the ride.", variant: "destructive" });
     }
@@ -470,7 +453,9 @@ export function UserDashboard() {
 
   const userRides = rides.filter((ride) => ride.user.id === currentUserProfile?.id);
   const pendingRides = userRides.filter((ride) => ride.status === "pending");
-  const scheduledRides = userRides.filter((ride) => ride.status === "accepted");
+  const scheduledRides = userRides.filter((ride) => 
+    ride.status === "accepted" || (ride.status === "cancelled" && ride.cancellationFeeApplied)
+  );
   const completedRides = userRides.filter((ride) => ride.status === "completed");
   const deniedRides = userRides.filter((ride) => ride.status === "denied");
 
@@ -566,8 +551,8 @@ export function UserDashboard() {
                     <Button variant="outline" size="icon" onClick={() => handleEditRide(ride)}><Edit className="h-4 w-4" /><span className="sr-only">Edit Ride</span></Button>
                     <AlertDialog><AlertDialogTrigger asChild><Button variant="destructive">Cancel Ride</Button></AlertDialogTrigger>
                       <AlertDialogContent>
-                        <AlertDialogHeader><AlertDialogTitle>Are you sure you want to cancel?</AlertDialogTitle><AlertDialogDescription>A cancellation fee may apply. This action cannot be undone.</AlertDialogDescription></AlertDialogHeader>
-                        <AlertDialogFooter><AlertDialogCancel>Keep Ride</AlertDialogCancel><AlertDialogAction onClick={() => handleCancelRide(ride.id, ride.dateTime)}>Confirm Cancellation</AlertDialogAction></AlertDialogFooter>
+                        <AlertDialogHeader><AlertDialogTitle>Are you sure you want to cancel?</AlertDialogTitle><AlertDialogDescription>Cancellations within 24 hours of ride will be charged full price of ride. (No cancellation fee if ride is cancelled with 24hrs notice)</AlertDialogDescription></AlertDialogHeader>
+                        <AlertDialogFooter><AlertDialogCancel>Keep Ride</AlertDialogCancel><AlertDialogAction onClick={() => handleCancelRide(ride.id)}>Confirm Cancellation</AlertDialogAction></AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
                   </RideCard>

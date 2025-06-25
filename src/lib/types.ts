@@ -40,6 +40,8 @@ export interface Ride {
   isPaid?: boolean;
   isRevised?: boolean;
   comments?: Comment[];
+  cancelledAt?: any;
+  cancellationFeeApplied?: boolean;
 }
 
 export interface TransportOptions {

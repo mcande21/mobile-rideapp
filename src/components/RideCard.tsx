@@ -114,7 +114,8 @@ export function RideCard({
   const isUserRide = currentUserProfile?.id === ride.user.id;
   const showVenmoButton =
     isUserRide &&
-    (ride.status === "accepted" || ride.status === "completed") &&
+    ((ride.status === "accepted" || ride.status === "completed") ||
+     (ride.status === "cancelled" && ride.cancellationFeeApplied)) &&
     !ride.isPaid;
 
   const handlePayWithVenmo = () => {
@@ -246,24 +247,15 @@ export function RideCard({
   return (
     <Card className="w-full transition-all hover:shadow-md flex flex-col">
       <CardHeader>
-        {/* Fine print for cancelled within 24 hours */}
-        {ride.status === "cancelled" && (() => {
-          const now = new Date();
-          const rideDate = new Date(ride.dateTime);
-          const diffMs = rideDate.getTime() - now.getTime();
-          const diffHours = diffMs / (1000 * 60 * 60);
-          // If ride date is in the future and was cancelled within 24 hours of ride time
-          if (diffHours <= 24 && diffHours > 0) {
-            return (
-              <div className="text-xs text-red-600 font-semibold mb-2">
-                Rides cancelled within 24 hours are subject to a full price charge.
-              </div>
-            );
-          }
-          return null;
-        })()}
+        {/* Fine print for cancelled rides with fee applied */}
+        {ride.status === "cancelled" && ride.cancellationFeeApplied && (
+          <div className="text-xs text-red-600 font-semibold mb-2">
+            Rides cancelled within 24 hours of scheduled time are subject to full price charge
+          </div>
+        )}
         <div className="flex justify-between items-start mb-2">
            <div className="flex items-center gap-2">
+            {ride.status === "cancelled" && ride.cancellationFeeApplied && <Badge variant="destructive">CANCELLED</Badge>}
             {ride.isRevised && <Badge variant="destructive">REVISED</Badge>}
             {ride.isRoundTrip && <Badge variant="destructive">ROUND TRIP</Badge>}
            </div>
