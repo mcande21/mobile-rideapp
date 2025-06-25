@@ -8,7 +8,7 @@ import { Label } from "./ui/label";
 interface AutocompleteProps<T extends FieldValues> {
   control?: Control<T>;
   name?: Path<T>;
-  label: string;
+  label?: string;
   placeholder: string;
   value?: string;
   onChange?: (value: string) => void;
@@ -66,9 +66,9 @@ export function Autocomplete<T extends FieldValues>({
 
   return (
     <div className="space-y-2 relative">
-      <Label htmlFor={name || label}>{label}</Label>
+      {label && <Label htmlFor={name || label}>{label}</Label>}
       <Input
-        id={name || label}
+        id={name || label || 'autocomplete'}
         placeholder={placeholder}
         ref={inputRef}
         value={value}

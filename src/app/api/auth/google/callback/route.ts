@@ -49,6 +49,11 @@ export async function GET(req: Request) {
         accessToken: tokens.access_token,
         refreshToken: tokens.refresh_token || null,
         expiresIn: tokens.expiry_date || null
+      },
+      // Set Google profile picture as default custom avatar if user doesn't have one
+      customAvatar: {
+        type: 'google',
+        value: googleUser.picture
       }
     });
 

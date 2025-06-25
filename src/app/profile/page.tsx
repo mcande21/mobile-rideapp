@@ -17,6 +17,8 @@ import { Label } from "@/components/ui/label";
 import { Loader2, User, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete } from "@/components/Autocomplete";
+import { AvatarSelector } from "@/components/AvatarSelector";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 export default function ProfilePage() {
   const {
@@ -24,7 +26,6 @@ export default function ProfilePage() {
     currentUserProfile,
     updateUserProfile,
     loading,
-    linkWithGoogle,
   } = useRideStore();
   const router = useRouter();
   const { toast } = useToast();
@@ -33,8 +34,8 @@ export default function ProfilePage() {
   const [phoneNumber, setPhoneNumber] = useState("");
   const [homeAddress, setHomeAddress] = useState("");
   const [venmoUsername, setVenmoUsername] = useState("");
+  const [customAvatar, setCustomAvatar] = useState<{ type: 'color' | 'preset' | 'google'; value: string } | undefined>();
   const [isSaving, setIsSaving] = useState(false);
-  const [isLinking, setIsLinking] = useState(false);
 
   useEffect(() => {
     if (!loading && !currentUserProfile) {
@@ -45,10 +46,38 @@ export default function ProfilePage() {
       setPhoneNumber(currentUserProfile.phoneNumber || "");
       setHomeAddress(currentUserProfile.homeAddress || "");
       setVenmoUsername(currentUserProfile.venmoUsername || "");
+      setCustomAvatar(currentUserProfile.customAvatar);
     }
   }, [currentUserProfile, loading, router]);
 
+  const handleSaveAvatar = async (avatarConfig: { type: 'color' | 'preset' | 'google'; value: string }) => {
+    try {
+      await updateUserProfile({
+        name: currentUserProfile?.name || "",
+        phoneNumber: currentUserProfile?.phoneNumber || "",
+        homeAddress: currentUserProfile?.homeAddress || "",
+        venmoUsername: currentUserProfile?.venmoUsername || "",
+        customAvatar: avatarConfig,
+      });
+      
+      // Update local state to reflect the saved changes
+      setCustomAvatar(avatarConfig);
+      
+      toast({
+        title: "Avatar Updated!",
+        description: "Your avatar has been saved successfully.",
+      });
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "Could not save your avatar. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
     e.preventDefault();
     setIsSaving(true);
     try {
@@ -57,6 +86,7 @@ export default function ProfilePage() {
         phoneNumber,
         homeAddress,
         venmoUsername,
+        customAvatar,
       });
       toast({
         title: "Profile Updated",
@@ -113,18 +143,26 @@ export default function ProfilePage() {
   }
 
   return (
-    <div className="container mx-auto p-4 md:p-6 flex justify-center">
-      <Card className="w-full max-w-lg mt-8">
-        <form onSubmit={handleSave}>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User /> Edit Profile
-            </CardTitle>
-            <CardDescription>
-              Update your personal information here. Your email address cannot
-              be changed.
-            </CardDescription>
-          </CardHeader>
+    <div className="container mx-auto p-4 md:p-6 max-w-4xl">
+      <div className="mt-8">
+        <Tabs defaultValue="profile" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="profile">Profile Info</TabsTrigger>
+            <TabsTrigger value="avatar">Avatar & Appearance</TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="profile">
+            <Card>
+              <form onSubmit={handleSave}>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <User /> Edit Profile
+                  </CardTitle>
+                  <CardDescription>
+                    Update your personal information here. Your email address cannot
+                    be changed.
+                  </CardDescription>
+                </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
               <Label htmlFor="email">Email</Label>
@@ -163,7 +201,6 @@ export default function ProfilePage() {
               <Autocomplete
                 control={null as any} // Not using react-hook-form, so pass dummy
                 name="homeAddress"
-                label="Home Address (Optional)"
                 placeholder="123 Main St, Anytown"
                 // Use value/onChange to sync with local state
                 value={homeAddress}
@@ -183,11 +220,11 @@ export default function ProfilePage() {
               </div>
             )}
           </CardContent>
-          <CardFooter className="flex flex-col gap-2">
+          <CardFooter>
             <Button
               className="w-full"
               type="submit"
-              disabled={isSaving || isLinking}
+              disabled={isSaving}
             >
               {isSaving ? (
                 <Loader2 className="animate-spin" />
@@ -198,22 +235,21 @@ export default function ProfilePage() {
                 </>
               )}
             </Button>
-            <Button
-              variant="outline"
-              className="w-full"
-              type="button"
-              onClick={handleLinkGoogle}
-              disabled={isSaving || isLinking}
-            >
-              {isLinking ? (
-                <Loader2 className="animate-spin" />
-              ) : (
-                "Sync to Google Calendar"
-              )}
-            </Button>
           </CardFooter>
         </form>
       </Card>
+    </TabsContent>
+    
+    <TabsContent value="avatar">
+      <AvatarSelector 
+        user={currentUserProfile} 
+        onSelect={(avatarConfig) => setCustomAvatar(avatarConfig)}
+        onSave={handleSaveAvatar}
+      />
+    </TabsContent>
+    
+    </Tabs>
+    </div>
     </div>
   );
 }

@@ -11,6 +11,19 @@ export interface User {
   phoneNumber?: string;
   homeAddress?: string;
   venmoUsername?: string;
+  customAvatar?: {
+    type: 'color' | 'preset' | 'google';
+    value: string; // hex color, preset image name, or google picture URL
+  };
+  googleAccount?: {
+    id: string;
+    email: string;
+    name: string;
+    picture: string;
+    accessToken: string;
+    refreshToken?: string;
+    expiresIn?: number;
+  };
 }
 
 export interface Comment {

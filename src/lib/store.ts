@@ -55,6 +55,7 @@ interface RideState {
     phoneNumber: string;
     homeAddress: string;
     venmoUsername?: string;
+    customAvatar?: { type: 'color' | 'preset' | 'google'; value: string };
   }) => Promise<void>;
   addRide: (
     pickup: string,
@@ -229,6 +230,8 @@ export const useRideStore = create<RideState>((set, get) => ({
           phoneNumber: data.phoneNumber,
           homeAddress: data.homeAddress,
           venmoUsername: data.venmoUsername,
+          customAvatar: data.customAvatar,
+          googleAccount: data.googleAccount,
         },
       });
     }
