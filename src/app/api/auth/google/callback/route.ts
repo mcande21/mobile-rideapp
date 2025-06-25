@@ -57,8 +57,13 @@ export async function GET(req: Request) {
       }
     });
 
-    // Redirect to user dashboard
-    return NextResponse.redirect(new URL('/user', req.url));
+    // Redirect based on context or default to user dashboard
+    const redirectUrl = new URL('/user', req.url);
+    
+    // Add success parameter to trigger calendar action check on client
+    redirectUrl.searchParams.set('google-connected', 'true');
+    
+    return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error('Error exchanging code for tokens:', error);
     return NextResponse.json({ error: 'Failed to authenticate with Google' }, { status: 500 });

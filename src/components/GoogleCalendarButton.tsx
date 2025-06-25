@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { Calendar, Check } from 'lucide-react';
 import type { Ride } from '@/lib/types';
-import { useGoogleAuth } from '@/hooks/useGoogleAuth';
 import { useRideStore } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
 
@@ -25,12 +24,40 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
     }
   }, [currentUserProfile]);
 
-  const { authenticate, isAuthenticating } = useGoogleAuth({
-    onTokenReceived: (token) => {
-      setAccessToken(token);
-      handleAddToCalendar(token);
+  const authenticateUser = async () => {
+    if (!currentUserProfile?.id) {
+      toast({
+        title: "Error",
+        description: "Please make sure you're logged in before connecting Google Calendar.",
+        variant: "destructive",
+      });
+      return;
     }
-  });
+
+    try {
+      // Store context for post-auth calendar action
+      const authContext = {
+        action: 'add-to-calendar',
+        rideId: ride.id,
+        timestamp: Date.now()
+      };
+      localStorage.setItem('pending-calendar-action', JSON.stringify(authContext));
+      
+      // Use the main Google auth flow - this will redirect the entire window
+      const response = await fetch(
+        `/api/auth/google/url?userId=${currentUserProfile.id}`
+      );
+      const { url } = await response.json();
+      window.location.href = url;
+    } catch (error) {
+      console.error("Error fetching Google Auth URL:", error);
+      toast({
+        title: "Error",
+        description: "Could not connect to Google Calendar. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
 
   const handleAddToCalendar = async (token: string = accessToken!) => {
     setIsAddingEvent(true);
@@ -117,11 +144,11 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
     if (accessToken) {
       handleAddToCalendar();
     } else {
-      authenticate();
+      authenticateUser();
     }
   };
 
-  const isLoading = isAuthenticating || isAddingEvent;
+  const isLoading = isAddingEvent;
   const hasGoogleAccount = !!currentUserProfile?.googleAccount;
 
   // If event was already added, show status
@@ -146,7 +173,7 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
       {isLoading ? (
         <>
           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
-          {isAuthenticating ? 'Connecting...' : 'Adding...'}
+          {'Adding...'}
         </>
       ) : (
         <>
