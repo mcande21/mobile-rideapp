@@ -421,7 +421,56 @@ export function UserDashboard() {
     return () => clearTimeout(handler);
   }, [editPickup, editDropoff, editDate, editTime, editIsRoundTrip, stops]);
 
+  // --- Enhanced validation for stops and transport details ---
+  function validateRideForm(values: RideFormData) {
+    // Validate pickup/dropoff (already handled by zod)
+    // Validate stops: no empty stops
+    if (stops.some((stop) => !stop.trim())) {
+      setDirectionsError("Stops cannot be empty. Please fill in or remove empty stops.");
+      return false;
+    }
+    // Validate date/time
+    if (!date || !time) {
+      setDateTimeError("Please select a date and time.");
+      return false;
+    }
+    // Round trip: validate return time/date
+    if (isRoundTrip) {
+      if (shouldShowTransportSection) {
+        if (!returnDate || !returnTime) {
+          setDateTimeError("Please select a return date and time.");
+          return false;
+        }
+        // Return must be after departure
+        const [h1, m1] = time.split(":").map(Number);
+        const [h2, m2] = returnTime.split(":").map(Number);
+        const departureDateTime = new Date(date);
+        departureDateTime.setHours(h1, m1, 0, 0);
+        const returnDateTime = new Date(returnDate);
+        returnDateTime.setHours(h2, m2, 0, 0);
+        if (returnDateTime <= departureDateTime) {
+          setDateTimeError("Return date/time must be after departure.");
+          return false;
+        }
+        // Transport details required if type selected
+        if (transportType && (!transportNumber.trim() || !returnTransportNumber.trim())) {
+          setDirectionsError("Please enter both outbound and return transport numbers.");
+          return false;
+        }
+      } else {
+        if (!returnTime) {
+          setDateTimeError("Please select a return time.");
+          return false;
+        }
+      }
+    }
+    setDateTimeError("");
+    setDirectionsError("");
+    return true;
+  }
+
   const handleRequestRide = async (values: RideFormData) => {
+    if (!validateRideForm(values)) return;
     if (date && time && fare !== null) {
       setIsSubmitting(true);
       try {
@@ -498,7 +547,7 @@ export function UserDashboard() {
         setStops([]); // Reset stops
       } catch (error) {
         console.error("Error requesting ride:", error);
-        toast({ title: "Error Requesting Ride", description: "There was a problem submitting your request.", variant: "destructive" });
+        toast({ title: "Error Requesting Ride", description: (typeof error === 'object' && error && 'message' in error) ? (error as any).message : "There was a problem submitting your request.", variant: "destructive" });
       } finally {
         setIsSubmitting(false);
       }
@@ -578,13 +627,14 @@ export function UserDashboard() {
     }
   };
   
-  const userRides = rides.filter((ride) => ride.user.id === currentUserProfile?.id);
+  // Defensive rendering for rides
+  const userRides = rides.filter((ride) => ride.user?.id === currentUserProfile?.id);
   const pendingRides = userRides.filter((ride) => ride.status === "pending");
   const scheduledRides = userRides
     .filter((ride) => 
       ride.status === "accepted" || (ride.status === "cancelled" && ride.cancellationFeeApplied)
     )
-    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+    .sort((a, b) => new Date(a.dateTime || 0).getTime() - new Date(b.dateTime || 0).getTime());
   const completedRides = userRides.filter((ride) => {
     if (ride.status !== "completed") return false;
     if (!ride.dateTime) return true;

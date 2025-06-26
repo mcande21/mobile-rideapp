@@ -68,25 +68,38 @@ export default function SignUpPage() {
     }
   };
 
+  const validateEmail = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
   const handleSignUp = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Client-side validation
+    if (name.trim().length < 2) {
+      setError("Please enter your full name.");
+      return;
+    }
+    if (!validateEmail(email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
     if (password !== confirmPassword) {
       setError("Passwords do not match.");
       return;
     }
-    
-    // Validate phone number
     if (!phoneNumber || !isValidPhoneNumber(phoneNumber)) {
       setError("Please enter a valid phone number.");
       return;
     }
-    
     setError(null);
     setAuthAction("email");
     try {
       await signUp(name, email, password, phoneNumber, homeAddress);
-      // Email signup includes all required fields, so user should be redirected to main dashboard
-      // The main page routing logic will handle the appropriate redirect
+      // Redirect handled by effect
     } catch (err: any) {
       if (err.code === "auth/email-already-in-use") {
         setError("This email is already in use.");
@@ -171,7 +184,7 @@ export default function SignUpPage() {
                 value={phoneNumber}
                 onChange={(value) => setPhoneNumber(value || "")}
                 placeholder="Enter your phone number"
-                required
+                required={true}
               />
               <div className="space-y-2">
                 <Autocomplete

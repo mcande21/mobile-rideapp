@@ -31,39 +31,49 @@ export function DriverDashboard() {
     cleanupOldDeniedRides().catch(console.error);
   }, [cleanupOldDeniedRides]);
 
+  // Track loading state for each ride action to prevent duplicate submissions
+  const [loadingRideId, setLoadingRideId] = useState<string | null>(null);
+
   const handleAcceptRide = async (id: string) => {
+    setLoadingRideId(id);
     try {
       await acceptRide(id);
       toast({
         title: "Ride Accepted!",
         description: "The ride has been added to your schedule.",
       });
-    } catch (error) {
-       toast({
+    } catch (error: any) {
+      toast({
         title: "Error",
-        description: "Could not accept the ride.",
+        description: error?.message || "Could not accept the ride.",
         variant: "destructive"
       });
+    } finally {
+      setLoadingRideId(null);
     }
   };
 
   const handleRejectRide = async (id: string) => {
+    setLoadingRideId(id);
     try {
       await rejectRide(id);
       toast({
         title: "Ride Rejected",
         description: "The ride request has been removed.",
       });
-    } catch (error) {
-       toast({
+    } catch (error: any) {
+      toast({
         title: "Error",
-        description: "Could not reject the ride.",
+        description: error?.message || "Could not reject the ride.",
         variant: "destructive"
       });
+    } finally {
+      setLoadingRideId(null);
     }
   };
 
   const handleCancelRide = async (id: string) => {
+    setLoadingRideId(id);
     try {
       await cancelRideByDriver(id);
       toast({
@@ -71,16 +81,19 @@ export function DriverDashboard() {
         description: "The ride has been successfully cancelled.",
         variant: "destructive",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Could not cancel the ride.",
+        description: error?.message || "Could not cancel the ride.",
         variant: "destructive",
       });
+    } finally {
+      setLoadingRideId(null);
     }
   };
 
   const handleCompleteRide = async (id: string) => {
+    setLoadingRideId(id);
     try {
       // Check if this is a cancelled ride with fee applied
       const ride = rides.find(r => r.id === id);
@@ -99,28 +112,33 @@ export function DriverDashboard() {
           description: "The ride has been marked as completed.",
         });
       }
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Could not complete the ride.",
+        description: error?.message || "Could not complete the ride.",
         variant: "destructive",
       });
+    } finally {
+      setLoadingRideId(null);
     }
   };
 
   const handleUpdateFare = async (id: string, fare: number) => {
+    setLoadingRideId(id);
     try {
       await updateRideFare(id, fare);
       toast({
         title: "Fare Updated!",
         description: "The ride fare has been successfully updated.",
       });
-    } catch (error) {
+    } catch (error: any) {
       toast({
         title: "Error",
-        description: "Could not update the fare.",
+        description: error?.message || "Could not update the fare.",
         variant: "destructive",
       });
+    } finally {
+      setLoadingRideId(null);
     }
   };
 
@@ -170,6 +188,7 @@ export function DriverDashboard() {
                   size="icon"
                   className="bg-red-50 hover:bg-red-100 dark:bg-red-900/50 dark:hover:bg-red-900"
                   onClick={() => handleRejectRide(ride.id)}
+                  disabled={loadingRideId === ride.id}
                 >
                   <X className="h-4 w-4 text-red-600 dark:text-red-400" />
                   <span className="sr-only">Reject</span>
@@ -178,8 +197,9 @@ export function DriverDashboard() {
                   className="bg-green-500 hover:bg-green-600 text-white"
                   size="icon"
                   onClick={() => handleAcceptRide(ride.id)}
+                  disabled={loadingRideId === ride.id}
                 >
-                  <Check className="h-4 w-4" />
+                  {loadingRideId === ride.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                    <span className="sr-only">Accept</span>
                 </Button>
               </RideCard>
@@ -227,8 +247,8 @@ export function DriverDashboard() {
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
-                 <Button onClick={() => handleCompleteRide(ride.id)} className="ml-2">
-                  Complete Ride
+                 <Button onClick={() => handleCompleteRide(ride.id)} className="ml-2" disabled={loadingRideId === ride.id}>
+                  {loadingRideId === ride.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Complete Ride"}
                 </Button>
               </RideCard>
             ))}
@@ -257,8 +277,9 @@ export function DriverDashboard() {
                 <Button 
                   onClick={() => handleCompleteRide(ride.id)} 
                   className="bg-green-500 hover:bg-green-600 text-white"
+                  disabled={loadingRideId === ride.id}
                 >
-                  Complete & Remove
+                  {loadingRideId === ride.id ? <Loader2 className="h-4 w-4 animate-spin" /> : "Complete & Remove"}
                 </Button>
               </RideCard>
             ))}

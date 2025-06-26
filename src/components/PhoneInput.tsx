@@ -17,6 +17,16 @@ interface PhoneInputProps {
   className?: string;
 }
 
+// Utility: sanitize phone input
+function sanitizePhone(value: string | undefined): string | undefined {
+  if (!value) return value;
+  // Remove control/invisible chars
+  let sanitized = value.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, "");
+  // Limit length
+  if (sanitized.length > 20) sanitized = sanitized.slice(0, 20);
+  return sanitized;
+}
+
 export function PhoneInput({
   value,
   onChange,
@@ -44,7 +54,7 @@ export function PhoneInput({
           countryCallingCodeEditable={false}
           defaultCountry="US"
           value={value}
-          onChange={onChange}
+          onChange={v => onChange(sanitizePhone(v))}
           placeholder={placeholder}
           disabled={disabled}
           style={{

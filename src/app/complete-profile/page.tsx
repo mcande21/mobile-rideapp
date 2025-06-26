@@ -65,6 +65,12 @@ export default function CompleteProfilePage() {
       return;
     }
 
+    // Validate name
+    if (!name || name.trim().length < 2) {
+      setError("Please enter your full name.");
+      setIsSubmitting(false);
+      return;
+    }
     // Validate phone number
     if (!phoneNumber || !isValidPhoneNumber(phoneNumber)) {
       setError("Please enter a valid phone number.");

@@ -75,14 +75,37 @@ export default function SignInPage() {
     }
   }, [currentUserProfile, loading, router]);
 
+  const validateEmail = (email: string) => {
+    // Simple email regex
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  };
+
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+    // Client-side validation
+    if (!validateEmail(email)) {
+      setError("Please enter a valid email address.");
+      return;
+    }
+    if (password.length < 6) {
+      setError("Password must be at least 6 characters.");
+      return;
+    }
     setAuthAction("email");
     try {
       await login(email, password);
     } catch (error: any) {
-      setError("Invalid email or password. Please try again.");
+      // Granular error handling for Firebase Auth
+      if (error?.code === "auth/user-not-found") {
+        setError("No account found with this email.");
+      } else if (error?.code === "auth/wrong-password") {
+        setError("Incorrect password. Please try again.");
+      } else if (error?.code === "auth/too-many-requests") {
+        setError("Too many failed attempts. Please try again later.");
+      } else {
+        setError("Invalid email or password. Please try again.");
+      }
       console.error(error);
       setAuthAction("");
     }

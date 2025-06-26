@@ -20,6 +20,20 @@ export function GoogleCalendarSettings() {
   const [isLoading, setIsLoading] = useState(false);
   const [selectedCalendar, setSelectedCalendar] = useState<Calendar | null>(null);
   const { currentUserProfile, updateUserProfile } = useRideStore();
+  const [lastRefresh, setLastRefresh] = useState<number>(0);
+  const DEBOUNCE_MS = 1500;
+
+  // Utility: sanitize calendar name/description
+  function sanitizeText(text: string): string {
+    if (!text) return "";
+    // Remove control chars except common whitespace (tab, newline)
+    let sanitized = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, "");
+    // Remove invisible Unicode (zero-width, etc)
+    sanitized = sanitized.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, "");
+    // Limit length for display
+    if (sanitized.length > 100) sanitized = sanitized.slice(0, 100) + '…';
+    return sanitized;
+  }
 
   // Load current selection on mount
   useEffect(() => {
@@ -34,7 +48,9 @@ export function GoogleCalendarSettings() {
 
   const loadCalendars = async () => {
     if (!currentUserProfile?.googleAccount?.accessToken) return;
-
+    const now = Date.now();
+    if (now - lastRefresh < DEBOUNCE_MS) return; // Debounce
+    setLastRefresh(now);
     setIsLoading(true);
     try {
       const response = await fetch('/api/google-calendar/list-calendars', {
@@ -141,7 +157,7 @@ export function GoogleCalendarSettings() {
                   )}
                   <div>
                     <span className="text-sm font-medium">
-                      {selectedCalendar.summary}
+                      {sanitizeText(selectedCalendar.summary)}
                     </span>
                     {selectedCalendar.primary && (
                       <span className="text-xs text-muted-foreground ml-2">(Primary)</span>
@@ -193,7 +209,7 @@ export function GoogleCalendarSettings() {
                         )}
                         <div className="truncate">
                           <span className="block truncate">
-                            {calendar.summary}
+                            {sanitizeText(calendar.summary)}
                           </span>
                           {calendar.primary && (
                             <span className="text-xs text-muted-foreground">(Primary)</span>

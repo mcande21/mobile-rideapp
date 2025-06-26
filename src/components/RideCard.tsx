@@ -94,6 +94,17 @@ const formatTimeToAMPM = (isoString: string | undefined) => {
   return `${h}:${minutes} ${ampm}`;
 };
 
+// Utility: sanitize comment input
+function sanitizeComment(text: string): string {
+  // Remove control chars except common whitespace (tab, newline)
+  let sanitized = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, "");
+  // Remove invisible Unicode (zero-width, etc)
+  sanitized = sanitized.replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u206F\uFEFF]/g, "");
+  // Limit length
+  if (sanitized.length > 500) sanitized = sanitized.slice(0, 500);
+  return sanitized;
+}
+
 export function RideCard({
   ride,
   children,
@@ -103,19 +114,11 @@ export function RideCard({
   const { markAsPaid, currentUserProfile, addComment } = useRideStore();
   const [isEditingFare, setIsEditingFare] = useState(false);
   const [newFare, setNewFare] = useState(ride.fare);
-
-  // For round trip rides, determine if we should show the return leg
-  const isReturnLeg = useMemo(() => {
-    if (!ride.isRoundTrip || !ride.dateTime) return false;
-    const now = new Date();
-    const departureTime = new Date(ride.dateTime);
-    return now > departureTime;
-  }, [ride.isRoundTrip, ride.dateTime]);
-
-  // Get the current pickup/dropoff based on round trip status
-  const currentPickup = isReturnLeg ? ride.dropoff : ride.pickup;
-  const currentDropoff = isReturnLeg ? ride.pickup : ride.dropoff;
-  // Fee breakdown state
+  const [fareError, setFareError] = useState<string>("");
+  const [isUpdatingFare, setIsUpdatingFare] = useState(false);
+  const [isPostingComment, setIsPostingComment] = useState(false);
+  const [commentError, setCommentError] = useState<string>("");
+  const [venmoLoading, setVenmoLoading] = useState(false);
   const [rescheduleFee, setRescheduleFee] = useState<number | null>(null);
   const [dayOfFee, setDayOfFee] = useState<number | null>(null);
   const [showFeeBreakdown, setShowFeeBreakdown] = useState(false);
@@ -125,6 +128,9 @@ export function RideCard({
   const [showComments, setShowComments] = useState(false);
   const [commentText, setCommentText] = useState("");
 
+  // Error and loading state for comment posting and fare update
+  const [isSavingFare, setIsSavingFare] = useState(false);
+
   const isUserRide = currentUserProfile?.id === ride.user.id;
   const showVenmoButton =
     isUserRide &&
@@ -132,23 +138,20 @@ export function RideCard({
      (ride.status === "cancelled" && ride.cancellationFeeApplied)) &&
     !ride.isPaid;
 
-  const handlePayWithVenmo = () => {
-    // Use the driver's Venmo username or fallback
-    const venmoUsername = ride.driver?.venmoUsername || "Alex-Meisler";
-    const note = `${
-      ride.user.name
-    }: From ${ride.pickup} To ${ride.dropoff} On ${format(
-      new Date(ride.dateTime),
-      "MMM d, yyyy"
-    )}`;
-    
-    // Use the correct Venmo URL format
-    const venmoUrl = `https://venmo.com/u/${venmoUsername}?txn=pay&amount=${ride.fare.toFixed(
-      2
-    )}&note=${encodeURIComponent(note)}`;
-    
-    window.open(venmoUrl, "_blank");
-    markAsPaid(ride.id);
+  const handlePayWithVenmo = async () => {
+    setVenmoLoading(true);
+    try {
+      const venmoUsername = ride.driver?.venmoUsername || "Alex-Meisler";
+      const note = `${ride.user?.name || "User"}: From ${ride.pickup || "?"} To ${ride.dropoff || "?"} On ${ride.dateTime ? format(new Date(ride.dateTime), "MMM d, yyyy") : "?"}`;
+      const venmoUrl = `https://venmo.com/u/${venmoUsername}?txn=pay&amount=${ride.fare.toFixed(2)}&note=${encodeURIComponent(note)}`;
+      window.open(venmoUrl, "_blank");
+      await markAsPaid(ride.id);
+    } catch (error) {
+      // Show error toast or inline message
+      alert("Failed to mark as paid. Please try again.");
+    } finally {
+      setVenmoLoading(false);
+    }
   };
 
   const fetchFlightData = async () => {
@@ -222,19 +225,39 @@ export function RideCard({
   }, [isEditingFare, ride.pickup, ride.dropoff, ride.dateTime, ride.duration]);
 
   // Show fee breakdown after editing
-  const handleSaveFare = () => {
+  const handleSaveFare = async () => {
+    setFareError("");
+    if (isUpdatingFare) return;
+    if (!newFare || isNaN(newFare) || newFare <= 0) {
+      setFareError("Fare must be a positive number.");
+      return;
+    }
     if (onUpdateFare) {
-      onUpdateFare(ride.id, newFare);
-      setIsEditingFare(false);
-      setShowFeeBreakdown(true);
-      setDayOfFee(getDayOfSchedulingFee(ride.dateTime));
+      setIsUpdatingFare(true);
+      try {
+        await onUpdateFare(ride.id, newFare);
+        setIsEditingFare(false);
+        setShowFeeBreakdown(true);
+        setDayOfFee(getDayOfSchedulingFee(ride.dateTime));
+      } catch (error) {
+        setFareError("Failed to update fare. Please try again.");
+      } finally {
+        setIsUpdatingFare(false);
+      }
     }
   };
 
   const handleAddComment = async () => {
-    if (commentText.trim() === "" || !currentUserProfile) return;
+    setCommentError("");
+    if (isPostingComment) return;
+    let sanitized = sanitizeComment(commentText);
+    if (sanitized.trim() === "" || !currentUserProfile) {
+      setCommentError("Comment cannot be empty or contain only invalid characters.");
+      return;
+    }
+    setIsPostingComment(true);
     try {
-      await addComment(ride.id, commentText, {
+      await addComment(ride.id, sanitized, {
         id: currentUserProfile.id,
         name: currentUserProfile.name,
         avatarUrl: currentUserProfile.avatarUrl,
@@ -242,7 +265,9 @@ export function RideCard({
       setCommentText("");
       setShowComments(true);
     } catch (error) {
-      console.error("Failed to add comment", error);
+      setCommentError("Failed to add comment. Please try again.");
+    } finally {
+      setIsPostingComment(false);
     }
   };
 
@@ -312,8 +337,13 @@ export function RideCard({
                 <Button
                   onClick={handlePayWithVenmo}
                   className="bg-blue-500 hover:bg-blue-600 text-white h-8"
+                  disabled={venmoLoading}
                 >
-                  Pay with Venmo
+                  {venmoLoading ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    "Pay with Venmo"
+                  )}
                 </Button>
               )}
               {ride.isPaid && (
@@ -344,7 +374,7 @@ export function RideCard({
             <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
             <div>
               <span className="font-semibold text-foreground">From:</span>
-              <span className="text-muted-foreground ml-1">{currentPickup}</span>
+              <span className="text-muted-foreground ml-1">{ride.pickup}</span>
             </div>
           </div>
           {ride.stops && ride.stops.length > 0 && (
@@ -361,7 +391,7 @@ export function RideCard({
             <MapPin className="h-5 w-5 text-muted-foreground mt-0.5 invisible" />
             <div>
               <span className="font-semibold text-foreground">To:</span>
-              <span className="text-muted-foreground ml-1">{currentDropoff}</span>
+              <span className="text-muted-foreground ml-1">{ride.dropoff}</span>
             </div>
           </div>
         </div>
@@ -395,22 +425,29 @@ export function RideCard({
                 <Input
                   type="number"
                   value={newFare}
-                  onChange={(e) =>
-                    setNewFare(parseFloat(e.target.value) || 0)
-                  }
+                  onChange={(e) => setNewFare(parseFloat(e.target.value) || 0)}
                   className="h-8 w-24"
                   step="0.01"
                   min="0"
+                  disabled={isUpdatingFare}
                 />
                 <Button
                   size="icon"
                   variant="ghost"
                   className="h-8 w-8"
                   onClick={handleSaveFare}
+                  disabled={isUpdatingFare}
                 >
-                  <Check className="h-4 w-4" />
+                  {isUpdatingFare ? (
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Check className="h-4 w-4" />
+                  )}
                   <span className="sr-only">Save Fare</span>
                 </Button>
+                {fareError && (
+                  <span className="text-xs text-red-500 ml-2">{fareError}</span>
+                )}
               </div>
             )}
           </div>
@@ -441,9 +478,7 @@ export function RideCard({
                 <Clock className="h-5 w-5 text-muted-foreground" />
                 <div>
                   <span className="font-semibold text-foreground">Time:</span>
-                  <span className={`text-muted-foreground ml-2 ${
-                    ride.isRoundTrip && isReturnLeg ? 'line-through opacity-60' : ''
-                  }`}>
+                  <span className={`text-muted-foreground ml-2`}>
                     {format(new Date(ride.dateTime), "p")}
                   </span>
                 </div>
@@ -594,7 +629,9 @@ export function RideCard({
               {ride.comments.map((comment) => (
                 <div key={comment.id} className="flex items-start gap-2 text-sm">
                   <Avatar className="h-6 w-6">
-                    <AvatarImage src={comment.user.avatarUrl} alt={comment.user.name} />
+                    {comment.user.avatarUrl ? (
+                      <AvatarImage src={comment.user.avatarUrl} alt={comment.user.name} />
+                    ) : null}
                     <AvatarFallback 
                       className="text-xs font-semibold bg-muted"
                     >
@@ -623,8 +660,12 @@ export function RideCard({
                 value={commentText}
                 onChange={(e) => setCommentText(e.target.value)}
                 placeholder="Type your comment here..."
+                disabled={isPostingComment}
               />
-              <Button onClick={handleAddComment} size="sm">Post Comment</Button>
+              <Button onClick={handleAddComment} size="sm" disabled={isPostingComment}>
+                {isPostingComment ? <RefreshCw className="h-4 w-4 animate-spin" /> : "Post Comment"}
+              </Button>
+              {commentError && <div className="text-xs text-red-500">{commentError}</div>}
             </div>
           </div>
         )}
@@ -637,24 +678,24 @@ export function RideCard({
             </div>
             <div className="flex items-center gap-3 pl-8">
               <Avatar className="h-9 w-9">
-                {getAvatarUrl(ride.driver) && (
+                {ride.driver && getAvatarUrl(ride.driver) ? (
                   <AvatarImage
                     src={getAvatarUrl(ride.driver)}
                     alt={ride.driver.name}
                   />
-                )}
+                ) : null}
                 <AvatarFallback
-                  style={{ backgroundColor: getAvatarBackgroundColor(ride.driver) }}
+                  style={{ backgroundColor: ride.driver ? getAvatarBackgroundColor(ride.driver) : undefined }}
                   className="text-white font-semibold relative overflow-hidden"
                 >
-                  {ride.driver.customAvatar?.type === 'preset' ? (
+                  {ride.driver && ride.driver.customAvatar?.type === 'preset' ? (
                     <img 
                       src={`/patterns/${ride.driver.customAvatar.value}.svg`}
                       alt="Avatar"
                       className="w-5 h-5 object-contain"
                     />
                   ) : (
-                    getUserInitials(ride.driver.name)
+                    ride.driver ? getUserInitials(ride.driver.name) : "?"
                   )}
                 </AvatarFallback>
               </Avatar>

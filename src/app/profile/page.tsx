@@ -83,6 +83,16 @@ export default function ProfilePage() {
     e.preventDefault();
     setIsSaving(true);
 
+    // Validate name
+    if (!name || name.trim().length < 2) {
+      toast({
+        title: "Invalid Name",
+        description: "Please enter your full name (at least 2 characters).",
+        variant: "destructive",
+      });
+      setIsSaving(false);
+      return;
+    }
     // Validate phone number
     if (!phoneNumber || !isValidPhoneNumber(phoneNumber)) {
       toast({
