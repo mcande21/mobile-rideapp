@@ -186,6 +186,7 @@ export const useRideStore = create<RideState>((set, get) => ({
       role: "user",
       avatarUrl: `https://placehold.co/100x100.png`,
       phoneNumber,
+      customAvatar: { type: "preset", value: "car-svgrepo-com" },
       ...(homeAddress && { homeAddress }),
     });
   },
@@ -205,6 +206,7 @@ export const useRideStore = create<RideState>((set, get) => ({
           name: user.displayName || "New User",
           role: "user" as UserRole,
           avatarUrl: user.photoURL || `https://placehold.co/100x100.png`,
+          customAvatar: { type: "preset", value: "car-svgrepo-com" },
           // Deliberately omitting phoneNumber so the complete-profile flow triggers
         };
         
@@ -249,7 +251,25 @@ export const useRideStore = create<RideState>((set, get) => ({
     const { currentUser } = get();
     if (!db || !currentUser) throw new Error("User not logged in");
     const userDocRef = doc(db, "users", currentUser.uid);
-    await updateDoc(userDocRef, data);
+    // Set default values for all expected fields, with car SVG as default for customAvatar
+    const defaultData = {
+      name: "",
+      phoneNumber: "",
+      homeAddress: "",
+      venmoUsername: "",
+      customAvatar: {
+        type: "preset",
+        value: "car-svgrepo-com"
+      },
+    };
+    // Only overwrite customAvatar if provided and not undefined
+    const uploadData = {
+      ...defaultData,
+      ...data,
+      customAvatar:
+        data.customAvatar !== undefined ? data.customAvatar : defaultData.customAvatar,
+    };
+    await updateDoc(userDocRef, uploadData);
     // Fetch the updated profile and update the store
     const updatedDoc = await getDoc(userDocRef);
     if (updatedDoc.exists()) {

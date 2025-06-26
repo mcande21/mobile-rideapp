@@ -690,7 +690,7 @@ export function RideCard({
                 >
                   {ride.driver && ride.driver.customAvatar?.type === 'preset' ? (
                     <img 
-                      src={`/patterns/${ride.driver.customAvatar.value}.svg`}
+                      src={getAvatarUrl(ride.driver)}
                       alt="Avatar"
                       className="w-5 h-5 object-contain"
                     />

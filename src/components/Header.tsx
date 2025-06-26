@@ -109,7 +109,7 @@ export function Header() {
                   >
                     {currentUserProfile.customAvatar?.type === 'preset' ? (
                       <img 
-                        src={`/patterns/${currentUserProfile.customAvatar.value}.svg`}
+                        src={getAvatarUrl(currentUserProfile)}
                         alt="Avatar"
                         className="w-6 h-6 object-contain drop-shadow-sm"
                       />
