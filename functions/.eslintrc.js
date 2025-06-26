@@ -6,28 +6,23 @@ module.exports = {
   },
   extends: [
     "eslint:recommended",
-    "plugin:import/errors",
-    "plugin:import/warnings",
-    "plugin:import/typescript",
+    "plugin:@typescript-eslint/recommended", // Uses the recommended rules from the @typescript-eslint/eslint-plugin
     "google",
-    "plugin:@typescript-eslint/recommended",
   ],
-  parser: "@typescript-eslint/parser",
+  parser: "@typescript-eslint/parser", // Specifies the ESLint parser for TypeScript
   parserOptions: {
-    project: ["tsconfig.json", "tsconfig.dev.json"],
+    project: ["tsconfig.json"], // Allows for more advanced rules
     sourceType: "module",
+    ecmaVersion: 2020,
   },
-  ignorePatterns: [
-    "/lib/**/*", // Ignore built files.
-    "/generated/**/*", // Ignore generated files.
-  ],
   plugins: [
-    "@typescript-eslint",
-    "import",
+    "@typescript-eslint", // Specifies the ESLint plugin for TypeScript
+  ],
+  ignorePatterns: [
+    "/lib/**/*", // Don't lint the compiled JavaScript output
   ],
   rules: {
     "quotes": ["error", "double"],
-    "import/no-unresolved": 0,
-    "indent": ["error", 2],
+    "require-jsdoc": "off", // Often disabled for TypeScript projects
   },
 };

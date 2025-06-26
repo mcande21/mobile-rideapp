@@ -132,11 +132,12 @@ export function RideCard({
   const [isSavingFare, setIsSavingFare] = useState(false);
 
   const isUserRide = currentUserProfile?.id === ride.user.id;
-  const showVenmoButton =
-    isUserRide &&
-    ((ride.status === "accepted" || ride.status === "completed") ||
-     (ride.status === "cancelled" && ride.cancellationFeeApplied)) &&
-    !ride.isPaid;
+  const isDriver = currentUserProfile?.id === ride.driver?.id;
+
+  // Venmo button: always visible to user (rider)
+  const showVenmoButton = isUserRide && !ride.isPaid;
+  // Mark as Paid button: only visible to driver
+  const showMarkAsPaidButton = isDriver && !ride.isPaid;
 
   const handlePayWithVenmo = async () => {
     setVenmoLoading(true);
@@ -145,12 +146,19 @@ export function RideCard({
       const note = `${ride.user?.name || "User"}: From ${ride.pickup || "?"} To ${ride.dropoff || "?"} On ${ride.dateTime ? format(new Date(ride.dateTime), "MMM d, yyyy") : "?"}`;
       const venmoUrl = `https://venmo.com/u/${venmoUsername}?txn=pay&amount=${ride.fare.toFixed(2)}&note=${encodeURIComponent(note)}`;
       window.open(venmoUrl, "_blank");
-      await markAsPaid(ride.id);
+      // Do NOT mark as paid here
     } catch (error) {
-      // Show error toast or inline message
-      alert("Failed to mark as paid. Please try again.");
+      alert("Failed to open Venmo. Please try again.");
     } finally {
       setVenmoLoading(false);
+    }
+  };
+
+  const handleMarkAsPaid = async () => {
+    try {
+      await markAsPaid(ride.id);
+    } catch (error) {
+      alert("Failed to mark as paid. Please try again.");
     }
   };
 
@@ -344,6 +352,15 @@ export function RideCard({
                   ) : (
                     "Pay with Venmo"
                   )}
+                </Button>
+              )}
+              {showMarkAsPaidButton && (
+                <Button
+                  onClick={handleMarkAsPaid}
+                  className="bg-green-500 hover:bg-green-600 text-white h-8"
+                  disabled={ride.isPaid}
+                >
+                  Mark as Paid
                 </Button>
               )}
               {ride.isPaid && (
