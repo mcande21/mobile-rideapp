@@ -3,6 +3,7 @@
 import { create } from "zustand";
 import type { Ride, User, TransportType, Direction, UserRole, Comment } from "./types";
 import { auth, db, isConfigured } from "./firebase";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -29,6 +30,7 @@ import {
   setDoc,
   deleteField,
   arrayUnion,
+  where, // <-- Added import
 } from "firebase/firestore";
 import { seedUsers } from "./mock-data";
 
@@ -128,7 +130,6 @@ export const useRideStore = create<RideState>((set, get) => ({
           if (userDoc.exists()) {
             break;
           }
-          
           // If document doesn't exist, wait a bit and retry
           // This handles the case where Google sign-up is still creating the document
           if (retries > 1) {
@@ -138,9 +139,47 @@ export const useRideStore = create<RideState>((set, get) => ({
         }
         
         if (userDoc && userDoc.exists()) {
-          set({
-            currentUserProfile: { id: user.uid, ...userDoc.data() } as User,
-          });
+          const profile = { id: user.uid, ...userDoc.data() } as User;
+          set({ currentUserProfile: profile });
+
+          const ridesCollection = collection(db!, "rides");
+          let unsubRides = () => {}; // Initialize an empty unsubscribe function
+
+          // --- START REPLACEMENT LOGIC ---
+          if (profile.role === 'driver') {
+              // --- DRIVER ---
+              // 1. Get all pending rides
+              const pendingQuery = query(ridesCollection, where("status", "==", "pending"));
+              // 2. Get all rides accepted by THIS driver
+              const acceptedQuery = query(ridesCollection, where("driver.id", "==", user.uid));
+
+              // Listen to both queries and combine the results
+              const unsubPending = onSnapshot(pendingQuery, (pendingSnapshot) => {
+                  const pendingRides = pendingSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ride));
+                  const unsubAccepted = onSnapshot(acceptedQuery, (acceptedSnapshot) => {
+                      const acceptedRides = acceptedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ride));
+                      // Combine and remove duplicates (if any)
+                      const allRides = [...pendingRides, ...acceptedRides];
+                      const uniqueRides = Array.from(new Map(allRides.map(ride => [ride.id, ride])).values());
+                      set({ rides: uniqueRides.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)) });
+                  });
+                  unsubRides = () => {
+                      unsubPending();
+                      unsubAccepted();
+                  };
+              });
+          } else {
+              // --- REGULAR USER ---
+              // Get only the rides created by this user
+              const userRidesQuery = query(ridesCollection, where("user.id", "==", user.uid));
+              unsubRides = onSnapshot(userRidesQuery, (snapshot) => {
+                  const rides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ride));
+                  set({ rides });
+              });
+          }
+          // --- END REPLACEMENT LOGIC ---
+          set({ loading: false });
+          return unsubRides; // This will now be the correct, role-specific unsubscribe function
         } else {
           // If user document still doesn't exist after retries, set to null
           // This will trigger the sign-in page logic
@@ -426,106 +465,45 @@ export const useRideStore = create<RideState>((set, get) => ({
     }
   },
   acceptRide: async (id: string) => {
-    const { currentUserProfile } = get();
-    if (!db || !currentUserProfile || currentUserProfile.role !== "driver") {
-      throw new Error("Driver not signed in or invalid permissions.");
-    }
-    const rideDocRef = doc(db, "rides", id);
-
-    const driverPayload: Partial<User> = {
-      id: currentUserProfile.id,
-      name: currentUserProfile.name,
-      avatarUrl: currentUserProfile.avatarUrl,
-      role: currentUserProfile.role,
-      venmoUsername: currentUserProfile.venmoUsername,
-    };
-    if (currentUserProfile.phoneNumber) {
-      driverPayload.phoneNumber = currentUserProfile.phoneNumber;
-    }
-
-    await updateDoc(rideDocRef, {
-      status: "accepted",
-      driver: driverPayload,
-      isRevised: false, // No longer needs 'revised' status
-    });
+    const functionsInstance = getFunctions();
+    const acceptRideFn = httpsCallable(functionsInstance, "acceptRide");
+    await acceptRideFn({ rideId: id });
   },
   rejectRide: async (id: string) => {
-    if (!db) throw new Error("Firebase not configured");
-    const rideDocRef = doc(db, "rides", id);
-    await updateDoc(rideDocRef, { status: "denied", driver: null });
+    const functionsInstance = getFunctions();
+    const rejectRideFn = httpsCallable(functionsInstance, "rejectRide");
+    await rejectRideFn({ rideId: id });
   },
   cancelRide: async (id: string): Promise<boolean> => {
-    if (!db) throw new Error("Firebase not configured");
-    const rideDocRef = doc(db, "rides", id);
-    const rideDoc = await getDoc(rideDocRef);
-    if (!rideDoc.exists()) {
-      throw new Error("Ride not found");
-    }
-    const ride = rideDoc.data() as Ride;
-    const now = new Date();
-    const rideDate = new Date(ride.dateTime);
-    const diffMs = rideDate.getTime() - now.getTime();
-    const diffHours = diffMs / (1000 * 60 * 60);
-
-    const isLateCancellation = diffHours <= 24 && diffHours > 0;
-
-    await updateDoc(rideDocRef, {
-      status: "cancelled",
-      cancelledAt: serverTimestamp(),
-      cancellationFeeApplied: isLateCancellation,
-    });
-
-    return isLateCancellation;
+    const functionsInstance = getFunctions();
+    const cancelRideFn = httpsCallable(functionsInstance, "cancelRide");
+    const result: any = await cancelRideFn({ rideId: id });
+    return result.data?.isLateCancellation ?? false;
   },
   cancelRideByDriver: async (id: string) => {
-    if (!db) return;
-    const rideRef = doc(db, "rides", id);
-    await updateDoc(rideRef, { status: "pending", driver: null });
+    const functionsInstance = getFunctions();
+    const cancelRideByDriverFn = httpsCallable(functionsInstance, "cancelRideByDriver");
+    await cancelRideByDriverFn({ rideId: id });
   },
-
   completeRide: async (id: string) => {
-    if (!db) throw new Error("Firebase not configured");
-    const rideDocRef = doc(db, "rides", id);
-    
-    // Check if this is a cancelled ride with fee applied
-    const rideDoc = await getDoc(rideDocRef);
-    if (rideDoc.exists()) {
-      const ride = rideDoc.data() as Ride;
-      if (ride.status === "cancelled" && ride.cancellationFeeApplied) {
-        // Delete the ride completely from the database
-        await deleteDoc(rideDocRef);
-        return;
-      }
-    }
-    
-    // For normal rides, just mark as completed
-    await updateDoc(rideDocRef, { status: "completed" });
+    const functionsInstance = getFunctions();
+    const completeRideFn = httpsCallable(functionsInstance, "completeRide");
+    await completeRideFn({ rideId: id });
   },
   updateRideFare: async (id: string, newFare: number) => {
-    if (!db) throw new Error("Firebase not configured");
-    const rideDocRef = doc(db, "rides", id);
-    await updateDoc(rideDocRef, { fare: newFare });
+    const functionsInstance = getFunctions();
+    const updateRideFareFn = httpsCallable(functionsInstance, "updateRideFare");
+    await updateRideFareFn({ rideId: id, newFare });
   },
-
   markAsPaid: async (id: string) => {
-    if (!db) return;
-    const rideRef = doc(db, "rides", id);
-    await updateDoc(rideRef, { isPaid: true });
+    const functionsInstance = getFunctions();
+    const markAsPaidFn = httpsCallable(functionsInstance, "markAsPaid");
+    await markAsPaidFn({ rideId: id });
   },
   addComment: async (rideId, text, user) => {
-    if (!db) throw new Error("Firebase not configured");
-    const rideRef = doc(db, "rides", rideId);
-    const newComment: Comment = {
-      id: `${user.id}-${new Date().getTime()}`,
-      text,
-      user,
-      createdAt: new Date(),
-    };
-
-    // Atomically add a new comment to the "comments" array field.
-    await updateDoc(rideRef, {
-      comments: arrayUnion(newComment),
-    });
+    const functionsInstance = getFunctions();
+    const addCommentFn = httpsCallable(functionsInstance, "addComment");
+    await addCommentFn({ rideId, text });
   },
   cleanupOldDeniedRides: async () => {
     if (!db) throw new Error("Firebase not configured");

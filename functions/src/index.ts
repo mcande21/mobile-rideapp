@@ -1,19 +1,183 @@
-/**
- * Import function triggers from their respective submodules:
- *
- * import {onCall} from "firebase-functions/v2/https";
- * import {onDocumentWritten} from "firebase-functions/v2/firestore";
- *
- * See a full list of supported triggers at https://firebase.google.com/docs/functions
- */
+import * as functions from "firebase-functions";
+import * as admin from "firebase-admin";
 
-import {onRequest} from "firebase-functions/v2/https";
-import * as logger from "firebase-functions/logger";
+admin.initializeApp();
+const db = admin.firestore();
 
-// Start writing functions
-// https://firebase.google.com/docs/functions/typescript
+// Helper to check for driver role
+const isDriver = async (uid: string): Promise<any> => {
+  const userDoc = await db.doc(`users/${uid}`).get();
+  const user = userDoc.data();
+  if (!user || user.role !== "driver") {
+    throw new functions.https.HttpsError("permission-denied", "User is not a driver.");
+  }
+  return user;
+};
 
-// export const helloWorld = onRequest((request, response) => {
-//   logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+// Accept Ride
+export const acceptRide = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Not signed in.");
+  
+  const driver = await isDriver(uid);
+  const rideId = data.rideId;
+
+  await db.doc(`rides/${rideId}`).update({
+    status: "accepted",
+    driver: {
+      id: uid,
+      name: driver.name,
+      avatarUrl: driver.avatarUrl,
+      role: driver.role,
+      venmoUsername: driver.venmoUsername,
+      phoneNumber: driver.phoneNumber,
+    },
+    isRevised: false,
+  });
+  return { success: true };
+});
+
+// Reject Ride
+export const rejectRide = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Not signed in.");
+  
+  await isDriver(uid); // Ensures only drivers can reject
+  const rideId = data.rideId;
+
+  await db.doc(`rides/${rideId}`).update({ status: "denied", driver: null });
+  return { success: true };
+});
+
+// Cancel Ride (by User)
+export const cancelRide = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Not signed in.");
+
+  const rideId = data.rideId;
+  const rideRef = db.doc(`rides/${rideId}`);
+  const rideDoc = await rideRef.get();
+  
+  if (!rideDoc.exists) throw new functions.https.HttpsError("not-found", "Ride not found.");
+  
+  const ride = rideDoc.data()!;
+  if (ride.user.id !== uid) throw new functions.https.HttpsError("permission-denied", "You can only cancel your own rides.");
+  
+  const now = new Date();
+  const rideDate = new Date(ride.dateTime);
+  const diffHours = (rideDate.getTime() - now.getTime()) / (1000 * 60 * 60);
+  const isLateCancellation = diffHours <= 24 && diffHours > 0;
+
+  await rideRef.update({
+    status: "cancelled",
+    cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+    cancellationFeeApplied: isLateCancellation,
+  });
+
+  return { isLateCancellation };
+});
+
+// Cancel Ride by Driver (puts it back in pending)
+export const cancelRideByDriver = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Not signed in.");
+  
+  await isDriver(uid);
+  const rideId = data.rideId;
+
+  await db.doc(`rides/${rideId}`).update({ status: "pending", driver: null });
+  return { success: true };
+});
+
+// Complete Ride
+export const completeRide = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Not signed in.");
+
+  const driver = await isDriver(uid);
+  const rideId = data.rideId;
+  const rideRef = db.doc(`rides/${rideId}`);
+  const rideDoc = await rideRef.get();
+
+  if (!rideDoc.exists) throw new functions.https.HttpsError("not-found", "Ride not found.");
+  
+  const ride = rideDoc.data()!;
+  if (ride.driver?.id !== driver.id) throw new functions.https.HttpsError("permission-denied", "You are not the driver for this ride.");
+
+  if (ride.status === "cancelled" && ride.cancellationFeeApplied) {
+    await rideRef.delete();
+    return { removed: true };
+  }
+
+  await rideRef.update({ status: "completed" });
+  return { removed: false };
+});
+
+// Update Ride Fare
+export const updateRideFare = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Not signed in.");
+
+  await isDriver(uid);
+  const { rideId, newFare } = data;
+  
+  if (typeof newFare !== 'number' || newFare <= 0) {
+    throw new functions.https.HttpsError("invalid-argument", "Fare must be a positive number.");
+  }
+  
+  await db.doc(`rides/${rideId}`).update({ fare: newFare });
+  return { success: true };
+});
+
+// Mark as Paid
+export const markAsPaid = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Not signed in.");
+
+  const driver = await isDriver(uid);
+  const rideId = data.rideId;
+  const rideRef = db.doc(`rides/${rideId}`);
+  const rideDoc = await rideRef.get();
+
+  if (!rideDoc.exists) throw new functions.https.HttpsError("not-found", "Ride not found.");
+  
+  const ride = rideDoc.data()!;
+  if (ride.driver?.id !== driver.id) {
+    throw new functions.https.HttpsError("permission-denied", "Only the driver can mark a ride as paid.");
+  }
+
+  await rideRef.update({ isPaid: true });
+  return { success: true };
+});
+
+// Add Comment
+export const addComment = functions.https.onCall(async (data, context) => {
+  const uid = context.auth?.uid;
+  if (!uid) throw new functions.https.HttpsError("unauthenticated", "Not signed in.");
+  
+  const { rideId, text } = data;
+  if (!text || typeof text !== 'string' || text.trim().length === 0) {
+    throw new functions.https.HttpsError("invalid-argument", "Comment text cannot be empty.");
+  }
+
+  const userDoc = await db.doc(`users/${uid}`).get();
+  if (!userDoc.exists) throw new functions.https.HttpsError("not-found", "User not found");
+  const user = userDoc.data()!;
+
+  const rideRef = db.doc(`rides/${rideId}`);
+  const comment = {
+    id: `${uid}-${Date.now()}`,
+    text,
+    user: {
+      id: uid,
+      name: user.name,
+      avatarUrl: user.avatarUrl,
+    },
+    createdAt: new Date(),
+  };
+  
+  await rideRef.update({
+    comments: admin.firestore.FieldValue.arrayUnion(comment),
+  });
+  return { success: true };
+});
