@@ -64,7 +64,7 @@ import { useForm, Controller } from "react-hook-form";
 import { Autocomplete } from "./Autocomplete";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { calculateTripFare } from "@/lib/fare";
+import { calculateTripFare, isTransportLocation, calculateTransportRoundTripFare } from "@/lib/fare";
 
 const rideFormSchema = z.object({
   pickup: z.string().min(1, "Pickup location is required"),
@@ -74,7 +74,7 @@ const rideFormSchema = z.object({
 type RideFormData = z.infer<typeof rideFormSchema>;
 
 export function UserDashboard() {
-  const { rides, addRide, cancelRide, updateRide, currentUserProfile } =
+  const { rides, addRide, cancelRide, updateRide, currentUserProfile, cleanupOldDeniedRides } =
     useRideStore();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -110,13 +110,22 @@ export function UserDashboard() {
   // New ride form state
   const [date, setDate] = useState<Date | undefined>();
   const [time, setTime] = useState("");
+  const [returnDate, setReturnDate] = useState<Date | undefined>();
   const [returnTime, setReturnTime] = useState("");
   const [isRoundTrip, setIsRoundTrip] = useState(false);
   const [direction, setDirection] = useState<Direction>("departure");
   const [transportType, setTransportType] = useState<TransportType | "">("");
   const [transportNumber, setTransportNumber] = useState("");
+  // For round trip transport details
+  const [returnDirection, setReturnDirection] = useState<Direction>("departure");
+  const [returnTransportType, setReturnTransportType] = useState<TransportType | "">("");
+  const [returnTransportNumber, setReturnTransportNumber] = useState("");
   const [fare, setFare] = useState<number | null>(null);
+  const [fareBreakdown, setFareBreakdown] = useState<{ outbound: number; return: number } | null>(null);
   const [isCalculatingFare, setIsCalculatingFare] = useState(false);
+
+  // Auto-show transport section when transport locations are detected
+  const shouldShowTransportSection = isTransportLocation(pickup) || isTransportLocation(dropoff);
 
   // Edit ride form state
   const [editDate, setEditDate] = useState<Date | undefined>();
@@ -137,21 +146,48 @@ export function UserDashboard() {
   // --- Return time validation for new ride form ---
   const [returnTimeError, setReturnTimeError] = useState<string>("");
   useEffect(() => {
-    if (isRoundTrip && time && returnTime) {
-      // Parse both times as today (date doesn't matter for diff)
-      const [h1, m1] = time.split(":").map(Number);
-      const [h2, m2] = returnTime.split(":").map(Number);
-      let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
-      if (diff < 0) diff += 24 * 60; // handle overnight return
-      if (diff > 600) {
-        setReturnTimeError("Return time must be within 10 hours of your initial time.");
+    if (isRoundTrip) {
+      if (shouldShowTransportSection) {
+        // Enhanced validation for transport locations (requires separate dates)
+        if (date && time && returnDate && returnTime) {
+          const [h1, m1] = time.split(":").map(Number);
+          const [h2, m2] = returnTime.split(":").map(Number);
+          
+          const departureDateTime = new Date(date);
+          departureDateTime.setHours(h1, m1, 0, 0);
+          
+          const returnDateTime = new Date(returnDate);
+          returnDateTime.setHours(h2, m2, 0, 0);
+          
+          // Check if return is after departure
+          if (returnDateTime <= departureDateTime) {
+            setReturnTimeError("Return date/time must be after departure date/time.");
+          } else {
+            setReturnTimeError("");
+          }
+        } else {
+          setReturnTimeError("");
+        }
       } else {
-        setReturnTimeError("");
+        // Simple validation for regular locations (same day, 10-hour limit)
+        if (time && returnTime) {
+          const [h1, m1] = time.split(":").map(Number);
+          const [h2, m2] = returnTime.split(":").map(Number);
+          let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+          if (diff < 0) diff += 24 * 60; // handle overnight return
+          if (diff > 600) {
+            setReturnTimeError("Return time must be within 10 hours of your initial time.");
+          } else {
+            setReturnTimeError("");
+          }
+        } else {
+          setReturnTimeError("");
+        }
       }
     } else {
       setReturnTimeError("");
     }
-  }, [isRoundTrip, time, returnTime]);
+  }, [isRoundTrip, shouldShowTransportSection, date, time, returnDate, returnTime]);
 
   // Helper: fetch reschedule fee from backend
   async function fetchRescheduleFee({
@@ -272,7 +308,9 @@ export function UserDashboard() {
 
   useEffect(() => {
     setIsClient(true);
-  }, []);
+    // Cleanup old denied rides when component mounts
+    cleanupOldDeniedRides().catch(console.error);
+  }, [cleanupOldDeniedRides]);
 
   // Fare calculation for new ride
   useEffect(() => {
@@ -285,13 +323,35 @@ export function UserDashboard() {
           const combinedDateTime = new Date(date);
           combinedDateTime.setHours(hours, minutes, 0, 0);
 
-          const calculatedFare = await calculateTripFare(
-            pickup,
-            dropoff,
-            combinedDateTime,
-            isRoundTrip
-          );
-          setFare(calculatedFare);
+          // Check if this is a transport location round trip
+          const isTransportTrip = isTransportLocation(pickup) || isTransportLocation(dropoff);
+          
+          if (isRoundTrip && isTransportTrip && returnDate && returnTime) {
+            // For transport round trips, calculate as two separate one-way trips
+            const [returnHours, returnMinutes] = returnTime.split(":").map(Number);
+            const returnDateTime = new Date(returnDate);
+            returnDateTime.setHours(returnHours, returnMinutes, 0, 0);
+            
+            const breakdown = await calculateTransportRoundTripFare(
+              pickup,
+              dropoff,
+              combinedDateTime,
+              returnDateTime
+            );
+            
+            setFare(breakdown.total);
+            setFareBreakdown({ outbound: breakdown.outbound, return: breakdown.return });
+          } else {
+            // Regular trip calculation
+            const calculatedFare = await calculateTripFare(
+              pickup,
+              dropoff,
+              combinedDateTime,
+              isRoundTrip
+            );
+            setFare(calculatedFare);
+            setFareBreakdown(null);
+          }
         } catch (error: any) {
           if (
             error &&
@@ -305,17 +365,19 @@ export function UserDashboard() {
             setDirectionsError("Failed to calculate fare. Please try again.");
           }
           setFare(null);
+          setFareBreakdown(null);
         } finally {
           setIsCalculatingFare(false);
         }
       } else {
         setFare(null);
+        setFareBreakdown(null);
         setDirectionsError("");
       }
     };
     const handler = setTimeout(calculate, 500);
     return () => clearTimeout(handler);
-  }, [pickup, dropoff, date, time, isRoundTrip]);
+  }, [pickup, dropoff, date, time, isRoundTrip, returnDate, returnTime]);
 
   // Fare calculation for editing ride
   useEffect(() => {
@@ -356,19 +418,72 @@ export function UserDashboard() {
         const combinedDateTime = new Date(date);
         combinedDateTime.setHours(hours, minutes, 0, 0);
         const dayFee = getDayOfSchedulingFee(combinedDateTime);
-        const totalFare = fare + dayFee;
-        await addRide(values.pickup, values.dropoff, totalFare, {
-          dateTime: combinedDateTime.toISOString(),
-          direction,
-          isRoundTrip,
-          transportType: transportType && transportNumber ? transportType : "",
-          transportNumber: transportType && transportNumber ? transportNumber : "",
-          ...(isRoundTrip && returnTime ? { returnTime } : {}),
-        });
+        
+        // Check if this is a transport hub round trip (two separate bookings)
+        const isTransportTrip = isTransportLocation(values.pickup) || isTransportLocation(values.dropoff);
+        
+        if (isRoundTrip && isTransportTrip && returnDate && returnTime && fareBreakdown) {
+          // Create two separate ride bookings for transport hub round trips
+          const [returnHours, returnMinutes] = returnTime.split(":").map(Number);
+          const returnDateTime = new Date(returnDate);
+          returnDateTime.setHours(returnHours, returnMinutes, 0, 0);
+          const returnDayFee = getDayOfSchedulingFee(returnDateTime);
+          
+          // Outbound trip (pickup -> dropoff)
+          await addRide(values.pickup, values.dropoff, fareBreakdown.outbound + dayFee, {
+            dateTime: combinedDateTime.toISOString(),
+            direction: "departure",
+            isRoundTrip: false,
+            transportType: transportType && transportNumber ? transportType : "",
+            transportNumber: transportType && transportNumber ? transportNumber : "",
+            tripLabel: "Outbound",
+          });
+          
+          // Return trip (dropoff -> pickup) 
+          await addRide(values.dropoff, values.pickup, fareBreakdown.return + returnDayFee, {
+            dateTime: returnDateTime.toISOString(),
+            direction: "arrival",
+            isRoundTrip: false,
+            transportType: transportType && returnTransportNumber ? transportType : "",
+            transportNumber: transportType && returnTransportNumber ? returnTransportNumber : "",
+            tripLabel: "Return",
+          });
+          
+          toast({ 
+            title: "Transport Trips Requested!", 
+            description: "Two separate ride requests have been created - one outbound and one return trip." 
+          });
+        } else {
+          // Regular single trip or non-transport round trip
+          const totalFare = fare + dayFee;
+          await addRide(values.pickup, values.dropoff, totalFare, {
+            dateTime: combinedDateTime.toISOString(),
+            direction: date && time ? direction : "departure",
+            isRoundTrip,
+            transportType: transportType && transportNumber ? transportType : "",
+            transportNumber: transportType && transportNumber ? transportNumber : "",
+            // Handle return time for regular round trips
+            ...(isRoundTrip && !shouldShowTransportSection && returnTime ? { returnTime } : {}),
+          });
+          
+          toast({ title: "Ride Requested!", description: "We are finding a driver for you." });
+        }
 
-        toast({ title: "Ride Requested!", description: "We are finding a driver for you." });
+        // Reset form
         form.reset();
-        setDate(undefined); setTime(""); setReturnTime(""); setIsRoundTrip(false); setDirection("departure"); setTransportType(""); setTransportNumber(""); setFare(null); setDayOfFee(0);
+        setDate(undefined); 
+        setTime(""); 
+        setReturnDate(undefined);
+        setReturnTime(""); 
+        setIsRoundTrip(false); 
+        setDirection("departure"); 
+        setTransportType(""); 
+        setTransportNumber(""); 
+        setReturnDirection("departure");
+        setReturnTransportNumber("");
+        setFare(null); 
+        setFareBreakdown(null);
+        setDayOfFee(0);
       } catch (error) {
         console.error("Error requesting ride:", error);
         toast({ title: "Error Requesting Ride", description: "There was a problem submitting your request.", variant: "destructive" });
@@ -409,7 +524,7 @@ export function UserDashboard() {
           totalAdjustedFare,
           {
             dateTime: combinedDateTime.toISOString(),
-            direction: editDirection,
+            direction: editDate && editTime ? editDirection : "departure",
             isRoundTrip: editIsRoundTrip,
             transportType: editTransportType && editTransportNumber ? editTransportType : "",
             transportNumber: editTransportType && editTransportNumber ? editTransportNumber : "",
@@ -458,7 +573,14 @@ export function UserDashboard() {
       ride.status === "accepted" || (ride.status === "cancelled" && ride.cancellationFeeApplied)
     )
     .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
-  const completedRides = userRides.filter((ride) => ride.status === "completed");
+  const completedRides = userRides.filter((ride) => {
+    if (ride.status !== "completed") return false;
+    if (!ride.dateTime) return true;
+    const rideDate = new Date(ride.dateTime);
+    const now = new Date();
+    const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+    return rideDate >= twoWeeksAgo;
+  });
   const deniedRides = userRides.filter((ride) => ride.status === "denied");
 
   if (!isClient) {
@@ -467,59 +589,150 @@ export function UserDashboard() {
 
   return (
     <>
-      <div className="container mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="container mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-1">
-          <Card>
-            <CardHeader>
-              <CardTitle>Request a Ride</CardTitle>
-              <CardDescription>Enter your pickup and drop-off locations.</CardDescription>
+          <Card className="max-w-lg mx-auto lg:mx-0">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-xl">Request a Ride</CardTitle>
+              <CardDescription className="text-sm">Enter your pickup and drop-off locations.</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-3">
               <form onSubmit={form.handleSubmit(handleRequestRide)} className="space-y-4">
                 <Autocomplete control={form.control} name="pickup" label="Pickup Location" placeholder="e.g., 123 Main St" />
                 <Autocomplete control={form.control} name="dropoff" label="Drop-off Location" placeholder="e.g., Anytown Airport" />
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
+                <div className="flex gap-4">
+                  <div className="space-y-2 flex-1">
                     <Label htmlFor="date">Date</Label>
                     <Popover><PopoverTrigger asChild><Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{date ? format(date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent></Popover>
                   </div>
-                  <div className="space-y-2"><Label htmlFor="time">Time</Label><Input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required /></div>
+                  <div className="space-y-2 w-32"><Label htmlFor="time">Time</Label><Input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required className="w-full" /></div>
                 </div>
-                <div className="flex items-center space-x-2 pt-2">
+                <div className="flex items-center justify-between pt-1">
+                  <div className="flex items-center space-x-2">
                   <Switch id="round-trip" checked={isRoundTrip} onCheckedChange={setIsRoundTrip} />
                   <Label htmlFor="round-trip">Round Trip</Label>
-                    {isRoundTrip && (
-                    <div className="space-y-2">
-                      <Input
-                      id="return-time"
-                      type="time"
-                      value={returnTime}
-                      onChange={e => setReturnTime(e.target.value)}
-                      required
-                      min={time}
-                      />
-                    </div>
-                    )}
+                  </div>
+                  
+                  {/* Simple Round Trip Return Time - Aligned to the right */}
+                  {isRoundTrip && !shouldShowTransportSection && (
+                  <div className="flex items-center space-x-1 ml-2">
+                    <Label htmlFor="simple-return-time" className="text-sm whitespace-nowrap">Return:</Label>
+                    <Input
+                    id="simple-return-time"
+                    type="time"
+                    value={returnTime}
+                    onChange={e => setReturnTime(e.target.value)}
+                    required
+                    min={time}
+                    className="w-28"
+                    />
+                  </div>
+                  )}
                 </div>
-                {isRoundTrip && (
-                  <div className={`text-xs mb-2 ${returnTimeError ? "text-red-500" : "text-muted-foreground"}`}>
+                
+                {/* Simple Round Trip validation message */}
+                {isRoundTrip && !shouldShowTransportSection && (
+                  <div className={`text-xs ${returnTimeError ? "text-red-500" : "text-muted-foreground"}`}>
                     Return time must be within 10 hours of your initial time.
                   </div>
                 )}
-                <div className="space-y-2">
-                  <Label>Transport Details (Optional)</Label>
-                  <div className="p-4 border rounded-lg space-y-4">
-                    <RadioGroup className="flex space-x-4" onValueChange={(value) => setDirection(value as Direction)} value={direction}>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="departure" id="departure" /><Label htmlFor="departure" className="font-normal">Departure</Label></div>
-                      <div className="flex items-center space-x-2"><RadioGroupItem value="arrival" id="arrival" /><Label htmlFor="arrival" className="font-normal">Arrival</Label></div>
-                    </RadioGroup>
-                    <Select onValueChange={(value) => setTransportType(value as TransportType)} value={transportType}>
-                      <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
-                      <SelectContent><SelectItem value="flight"><span className="flex items-center gap-2"><Plane /> Flight</span></SelectItem><SelectItem value="train"><span className="flex items-center gap-2"><Train /> Train</span></SelectItem><SelectItem value="bus"><span className="flex items-center gap-2"><Bus /> Bus</span></SelectItem></SelectContent>
-                    </Select>
-                    {transportType && <Input placeholder={`e.g., UA123`} value={transportNumber} onChange={(e) => setTransportNumber(e.target.value)} />}
+                
+                {/* Enhanced Round Trip for Transport Locations */}
+                {isRoundTrip && shouldShowTransportSection && (
+                  <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="return-date">Return Date</Label>
+                        <Popover>
+                          <PopoverTrigger asChild>
+                            <Button id="return-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !returnDate && "text-muted-foreground")}>
+                              <CalendarIcon className="mr-2 h-4 w-4" />
+                              {returnDate ? format(returnDate, "MMM d") : <span>Date</span>}
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-auto p-0">
+                            <Calendar mode="single" selected={returnDate} onSelect={setReturnDate} initialFocus />
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="return-time">Return Time</Label>
+                        <Input 
+                          id="return-time" 
+                          type="time" 
+                          value={returnTime} 
+                          onChange={(e) => setReturnTime(e.target.value)} 
+                          required 
+                        />
+                      </div>
+                    </div>
+                    {returnTimeError && (
+                      <div className="text-xs text-red-500">
+                        {returnTimeError}
+                      </div>
+                    )}
                   </div>
-                </div>
+                )}
+
+                {/* Transport Details Section - Shows automatically for transport locations */}
+                {shouldShowTransportSection && (
+                  <div className="space-y-2">
+                    <Label>Transport Details</Label>
+                    <div className="p-4 border rounded-lg space-y-4">
+                      <Select onValueChange={(value) => setTransportType(value as TransportType)} value={transportType}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select transport type..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="flight">
+                            <span className="flex items-center gap-2"><Plane className="h-4 w-4" /> Flight</span>
+                          </SelectItem>
+                          <SelectItem value="train">
+                            <span className="flex items-center gap-2"><Train className="h-4 w-4" /> Train</span>
+                          </SelectItem>
+                          <SelectItem value="bus">
+                            <span className="flex items-center gap-2"><Bus className="h-4 w-4" /> Bus</span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                      
+                      <div className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <Label className="text-sm font-semibold">
+                            {date && time ? `${format(date, "PPP")}` : "Departure"}
+                          </Label>
+                          <div className="text-xs text-muted-foreground">
+                            {isRoundTrip ? "Outbound" : "Transport Details"}
+                          </div>
+                        </div>
+                        <Input 
+                          placeholder={`e.g., ${transportType === 'flight' ? 'UA123' : transportType === 'train' ? 'Train 123' : transportType === 'bus' ? 'Bus 123' : 'Flight/Train/Bus Number'}`} 
+                          value={transportNumber} 
+                          onChange={(e) => setTransportNumber(e.target.value)} 
+                        />
+                      </div>
+
+                      {/* Return Transport Details */}
+                      {isRoundTrip && (
+                        <div className="space-y-4 pt-4 border-t">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-sm font-semibold">
+                              {returnDate && returnTime ? `${format(returnDate, "PPP")}` : "Arrival"}
+                            </Label>
+                            <div className="text-xs text-muted-foreground">
+                              Return
+                            </div>
+                          </div>
+                          <Input 
+                            placeholder={`e.g., ${transportType === 'flight' ? 'UA456' : transportType === 'train' ? 'Train 456' : transportType === 'bus' ? 'Bus 456' : 'Return Flight/Train/Bus Number'}`} 
+                            value={returnTransportNumber} 
+                            onChange={(e) => setReturnTransportNumber(e.target.value)} 
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
                 <div className="text-center text-xl font-bold text-foreground py-1 h-10 flex items-center justify-center gap-1">
                   <BadgeDollarSign /> Fare: {isCalculatingFare ? <Loader2 className="animate-spin" /> : fare !== null ? `$${(fare + dayOfFee).toFixed(2)}` : "--"}
                 </div>
@@ -527,7 +740,15 @@ export function UserDashboard() {
                 <div className="text-xs text-muted-foreground text-center mb-1">
                   <div style={{ marginBottom: 2 }}>Fare breakdown:</div>
                   <ul className="list-disc ml-4 text-left inline-block">
-                    <li>Base fare: ${fare?.toFixed(2) ?? "--"}</li>
+                    {fareBreakdown ? (
+                      <>
+                        <li>Outbound trip: ${fareBreakdown.outbound.toFixed(2)}</li>
+                        <li>Return trip: ${fareBreakdown.return.toFixed(2)}</li>
+                        <li>Subtotal: ${fare?.toFixed(2) ?? "--"}</li>
+                      </>
+                    ) : (
+                      <li>Base fare: ${fare?.toFixed(2) ?? "--"}</li>
+                    )}
                     {dayOfFee > 0 && <li>Day-of-scheduling fee: ${dayOfFee}</li>}
                     <li className="font-semibold">Total: ${fare !== null ? (fare + dayOfFee).toFixed(2) : "--"}</li>
                   </ul>
@@ -538,7 +759,22 @@ export function UserDashboard() {
                     {dateTimeError || directionsError}
                   </div>
                 ) : null}
-                <Button type="submit" className="w-full transition-all" disabled={!date || !time || isSubmitting || fare === null || !!dateTimeError || !!returnTimeError}>{isSubmitting ? <Loader2 className="animate-spin" /> : <><Car className="mr-2" />Request Ride</>}</Button>
+                <Button 
+                  type="submit" 
+                  className="w-full transition-all" 
+                  disabled={
+                    !date || 
+                    !time || 
+                    (isRoundTrip && shouldShowTransportSection && (!returnDate || !returnTime)) ||
+                    (isRoundTrip && !shouldShowTransportSection && !returnTime) ||
+                    isSubmitting || 
+                    fare === null || 
+                    !!dateTimeError || 
+                    !!returnTimeError
+                  }
+                >
+                  {isSubmitting ? <Loader2 className="animate-spin" /> : <><Car className="mr-2" />Request Ride</>}
+                </Button>
               </form>
             </CardContent>
           </Card>
@@ -654,15 +890,17 @@ export function UserDashboard() {
             <div className="space-y-2">
                 <Label>Transport Details (Optional)</Label>
                 <div className="p-4 border rounded-lg space-y-4">
-                <RadioGroup className="flex space-x-4" onValueChange={(value) => setEditDirection(value as Direction)} value={editDirection}>
-                    <div className="flex items-center space-x-2"><RadioGroupItem value="departure" id="edit-departure" /><Label htmlFor="edit-departure" className="font-normal">Departure</Label></div>
-                    <div className="flex items-center space-x-2"><RadioGroupItem value="arrival" id="edit-arrival" /><Label htmlFor="edit-arrival" className="font-normal">Arrival</Label></div>
-                </RadioGroup>
-                <Select onValueChange={(value) => setEditTransportType(value as TransportType)} value={editTransportType}>
-                    <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
-                    <SelectContent><SelectItem value="flight"><span className="flex items-center gap-2"><Plane /> Flight</span></SelectItem><SelectItem value="train"><span className="flex items-center gap-2"><Train /> Train</span></SelectItem><SelectItem value="bus"><span className="flex items-center gap-2"><Bus /> Bus</span></SelectItem></SelectContent>
-                </Select>
-                {editTransportType && <Input placeholder={`e.g., UA123`} value={editTransportNumber} onChange={(e) => setEditTransportNumber(e.target.value)} />}
+                  <div className="flex items-center justify-between">
+                    <Label className="text-sm font-semibold">Transport Details</Label>
+                    <div className="text-xs text-muted-foreground">
+                      {editDate && editTime ? `${format(editDate, "MMM d")} at ${editTime}` : "Departure"}
+                    </div>
+                  </div>
+                  <Select onValueChange={(value) => setEditTransportType(value as TransportType)} value={editTransportType}>
+                      <SelectTrigger><SelectValue placeholder="Select type..." /></SelectTrigger>
+                      <SelectContent><SelectItem value="flight"><span className="flex items-center gap-2"><Plane /> Flight</span></SelectItem><SelectItem value="train"><span className="flex items-center gap-2"><Train /> Train</span></SelectItem><SelectItem value="bus"><span className="flex items-center gap-2"><Bus /> Bus</span></SelectItem></SelectContent>
+                  </Select>
+                  {editTransportType && <Input placeholder={`e.g., UA123`} value={editTransportNumber} onChange={(e) => setEditTransportNumber(e.target.value)} />}
                 </div>
             </div>
              <div className="text-center text-xl font-bold text-foreground py-1 h-10 flex items-center justify-center gap-1">

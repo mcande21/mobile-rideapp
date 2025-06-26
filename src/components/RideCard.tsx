@@ -103,6 +103,18 @@ export function RideCard({
   const { markAsPaid, currentUserProfile, addComment } = useRideStore();
   const [isEditingFare, setIsEditingFare] = useState(false);
   const [newFare, setNewFare] = useState(ride.fare);
+
+  // For round trip rides, determine if we should show the return leg
+  const isReturnLeg = useMemo(() => {
+    if (!ride.isRoundTrip || !ride.dateTime) return false;
+    const now = new Date();
+    const departureTime = new Date(ride.dateTime);
+    return now > departureTime;
+  }, [ride.isRoundTrip, ride.dateTime]);
+
+  // Get the current pickup/dropoff based on round trip status
+  const currentPickup = isReturnLeg ? ride.dropoff : ride.pickup;
+  const currentDropoff = isReturnLeg ? ride.pickup : ride.dropoff;
   // Fee breakdown state
   const [rescheduleFee, setRescheduleFee] = useState<number | null>(null);
   const [dayOfFee, setDayOfFee] = useState<number | null>(null);
@@ -307,6 +319,14 @@ export function RideCard({
               {ride.isPaid && (
                 <Badge className="bg-green-500 hover:bg-green-600">PAID</Badge>
               )}
+              {ride.tripLabel && (
+                <Badge 
+                  variant="outline" 
+                  className="bg-purple-50 text-purple-700 border-purple-200"
+                >
+                  {ride.tripLabel}
+                </Badge>
+              )}
               <Badge variant={getStatusVariant(ride.status)} className="capitalize">
                 {ride.status}
               </Badge>
@@ -322,14 +342,14 @@ export function RideCard({
           <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
           <div>
             <span className="font-semibold text-foreground">From:</span>
-            <p className="text-muted-foreground">{ride.pickup}</p>
+            <p className="text-muted-foreground">{currentPickup}</p>
           </div>
         </div>
         <div className="flex items-start gap-3 text-sm">
           <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
           <div>
             <span className="font-semibold text-foreground">To:</span>
-            <p className="text-muted-foreground">{ride.dropoff}</p>
+            <p className="text-muted-foreground">{currentDropoff}</p>
           </div>
         </div>
         <div className="flex items-center gap-3 text-sm">
@@ -408,7 +428,9 @@ export function RideCard({
                 <Clock className="h-5 w-5 text-muted-foreground" />
                 <div>
                   <span className="font-semibold text-foreground">Time:</span>
-                  <span className="text-muted-foreground ml-2">
+                  <span className={`text-muted-foreground ml-2 ${
+                    ride.isRoundTrip && isReturnLeg ? 'line-through opacity-60' : ''
+                  }`}>
                     {format(new Date(ride.dateTime), "p")}
                   </span>
                 </div>

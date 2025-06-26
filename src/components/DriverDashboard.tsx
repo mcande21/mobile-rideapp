@@ -20,14 +20,16 @@ import {
 import { Separator } from "./ui/separator";
 
 export function DriverDashboard() {
-  const { rides, acceptRide, rejectRide, updateRideFare, cancelRideByDriver, completeRide } =
+  const { rides, acceptRide, rejectRide, updateRideFare, cancelRideByDriver, completeRide, cleanupOldDeniedRides } =
     useRideStore();
   const { toast } = useToast();
   
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
-  }, []);
+    // Cleanup old denied rides when component mounts
+    cleanupOldDeniedRides().catch(console.error);
+  }, [cleanupOldDeniedRides]);
 
   const handleAcceptRide = async (id: string) => {
     try {
@@ -122,7 +124,9 @@ export function DriverDashboard() {
     }
   };
 
-  const newRequests = rides.filter((ride) => ride.status === "pending");
+  const newRequests = rides
+    .filter((ride) => ride.status === "pending")
+    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
   const acceptedRides = rides
     .filter((ride) => ride.status === "accepted")
     .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
@@ -131,7 +135,14 @@ export function DriverDashboard() {
       ride.status === "cancelled" && ride.cancellationFeeApplied
     )
     .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
-  const completedRides = rides.filter((ride) => ride.status === "completed");
+  const completedRides = rides.filter((ride) => {
+    if (ride.status !== "completed") return false;
+    if (!ride.dateTime) return true;
+    const rideDate = new Date(ride.dateTime);
+    const now = new Date();
+    const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    return rideDate >= oneWeekAgo;
+  });
 
   if (!isClient) {
     return (

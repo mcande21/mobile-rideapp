@@ -57,6 +57,8 @@ export interface Ride {
   comments?: Comment[];
   cancelledAt?: any;
   cancellationFeeApplied?: boolean;
+  tripLabel?: "Outbound" | "Return"; // For transport hub round trips saved as separate rides
+  linkedTripId?: string; // ID of the linked trip (outbound <-> return)
 }
 
 export interface TransportOptions {

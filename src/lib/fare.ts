@@ -1,4 +1,3 @@
-
 export const airportAddresses = {
   JFK: [
     "John F. Kennedy International Airport, Jamaica, NY 11430",
@@ -252,4 +251,65 @@ export async function calculateTripFare(
   }
 
   return fare;
+}
+
+/**
+ * Detects if a location is a transport hub (airport, train station, etc.)
+ * Uses the predefined address arrays for accurate matching
+ */
+export function isTransportLocation(location: string): boolean {
+  if (!location) return false;
+  
+  const locationLower = location.toLowerCase();
+  
+  // Check against airport addresses
+  for (const [airportName, addresses] of Object.entries(airportAddresses)) {
+    if (addresses.some(address => 
+      locationLower.includes(address.toLowerCase()) || 
+      address.toLowerCase().includes(locationLower)
+    )) {
+      return true;
+    }
+  }
+  
+  // Check against train station addresses
+  for (const [stationName, addresses] of Object.entries(trainStationAddresses)) {
+    if (addresses.some(address => 
+      locationLower.includes(address.toLowerCase()) || 
+      address.toLowerCase().includes(locationLower)
+    )) {
+      return true;
+    }
+  }
+  
+  // Fallback to keyword matching for other transport types
+  const transportKeywords = [
+    'airport', 'train station', 'bus station', 'railway', 'depot',
+    'terminal', 'port', 'transit', 'metro', 'subway', 'station',
+    'bus terminal', 'transportation hub', 'transit center'
+  ];
+  
+  return transportKeywords.some(keyword => locationLower.includes(keyword));
+}
+
+/**
+ * Calculates fare for transport location round trips as two separate one-way trips
+ */
+export async function calculateTransportRoundTripFare(
+  pickupLocation: string,
+  dropoffLocation: string,
+  outboundTime: Date,
+  returnTime: Date
+): Promise<{ total: number; outbound: number; return: number }> {
+  // Calculate outbound trip (pickup -> dropoff)
+  const outboundFare = await calculateTripFare(pickupLocation, dropoffLocation, outboundTime, false);
+  
+  // Calculate return trip (dropoff -> pickup)
+  const returnFare = await calculateTripFare(dropoffLocation, pickupLocation, returnTime, false);
+  
+  return {
+    total: outboundFare + returnFare,
+    outbound: outboundFare,
+    return: returnFare
+  };
 }

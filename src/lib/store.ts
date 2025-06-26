@@ -68,6 +68,8 @@ interface RideState {
       direction?: Direction;
       isRoundTrip?: boolean;
       returnTime?: string; // Optional for round trip
+      tripLabel?: "Outbound" | "Return"; // For transport hub round trips
+      linkedTripId?: string; // ID of linked trip
     }
   ) => Promise<void>;
   updateRide: (
@@ -96,6 +98,7 @@ interface RideState {
     text: string,
     user: Pick<User, "id" | "name" | "avatarUrl">
   ) => Promise<void>;
+  cleanupOldDeniedRides: () => Promise<void>;
 }
 
 export const useRideStore = create<RideState>((set, get) => ({
@@ -300,7 +303,7 @@ export const useRideStore = create<RideState>((set, get) => ({
         userPayload.homeAddress = currentUserProfile.homeAddress;
       }
 
-      const { transportType, ...otherDetails } = details;
+      const { transportType, linkedTripId, tripLabel, ...otherDetails } = details;
 
       const newRide: Omit<Ride, "id" | "user"> & { user: Partial<User> } = {
         user: userPayload,
@@ -315,6 +318,14 @@ export const useRideStore = create<RideState>((set, get) => ({
 
       if (transportType) {
         (newRide as any).transportType = transportType;
+      }
+
+      if (linkedTripId) {
+        (newRide as any).linkedTripId = linkedTripId;
+      }
+
+      if (tripLabel) {
+        (newRide as any).tripLabel = tripLabel;
       }
 
       await addDoc(collection(db, "rides"), newRide);
@@ -474,6 +485,37 @@ export const useRideStore = create<RideState>((set, get) => ({
     await updateDoc(rideRef, {
       comments: arrayUnion(newComment),
     });
+  },
+  cleanupOldDeniedRides: async () => {
+    if (!db) throw new Error("Firebase not configured");
+    
+    const now = new Date();
+    const threeWeeksAgo = new Date(now.getTime() - (3 * 7 * 24 * 60 * 60 * 1000)); // 3 weeks in milliseconds
+    
+    const ridesCollection = collection(db, "rides");
+    const q = query(ridesCollection);
+    const snapshot = await getDocs(q);
+    
+    const batch = writeBatch(db);
+    let deletedCount = 0;
+    
+    snapshot.docs.forEach((docSnapshot) => {
+      const ride = docSnapshot.data() as Ride;
+      if (ride.status === "denied" && ride.createdAt) {
+        // Handle both Firestore Timestamp and regular Date
+        const createdDate = ride.createdAt.toDate ? ride.createdAt.toDate() : new Date(ride.createdAt);
+        
+        if (createdDate < threeWeeksAgo) {
+          batch.delete(docSnapshot.ref);
+          deletedCount++;
+        }
+      }
+    });
+    
+    if (deletedCount > 0) {
+      await batch.commit();
+      console.log(`Cleaned up ${deletedCount} old denied rides`);
+    }
   },
 }));
 
