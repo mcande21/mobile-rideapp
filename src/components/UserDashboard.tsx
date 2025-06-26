@@ -569,7 +569,54 @@ export function UserDashboard() {
     setIsEditDialogOpen(true);
   };
 
+  // --- Enhanced validation for edit ride form ---
+  function validateEditRideForm(values: RideFormData) {
+    // Validate pickup/dropoff (already handled by zod)
+    // Validate date/time
+    if (!editDate || !editTime) {
+      setEditDateTimeError("Please select a date and time.");
+      return false;
+    }
+    // Round trip: validate return time
+    if (editIsRoundTrip) {
+      if (!editReturnTime) {
+        setEditDateTimeError("Please select a return time.");
+        return false;
+      }
+      // Return time must be within 10 hours of pickup
+      const [h1, m1] = editTime.split(":").map(Number);
+      const [h2, m2] = editReturnTime.split(":").map(Number);
+      let diff = (h2 * 60 + m2) - (h1 * 60 + m1);
+      if (diff < 0) diff += 24 * 60; // handle overnight return
+      if (diff > 600) {
+        setEditDateTimeError("Return time must be within 10 hours of your pickup time.");
+        return false;
+      }
+    }
+    setEditDateTimeError("");
+    return true;
+  }
+
+  // Reset edit dialog state on close
+  useEffect(() => {
+    if (!isEditDialogOpen) {
+      setEditingRide(null);
+      setEditDate(undefined);
+      setEditTime("");
+      setEditReturnTime("");
+      setEditIsRoundTrip(false);
+      setEditDirection("departure");
+      setEditTransportType("");
+      setEditTransportNumber("");
+      setEditFare(null);
+      setEditDateTimeError("");
+      setEditDayOfFee(0);
+      setRescheduleFee(0);
+    }
+  }, [isEditDialogOpen]);
+
   const handleUpdateRide = async (values: RideFormData) => {
+    if (!validateEditRideForm(values)) return;
     if (editingRide && editDate && editTime && editFare !== null) {
       setIsSubmitting(true);
       try {
@@ -598,7 +645,7 @@ export function UserDashboard() {
         setEditingRide(null);
       } catch (error) {
         console.error("Error updating ride:", error);
-        toast({ title: "Error Updating Ride", description: "There was a problem updating your request.", variant: "destructive" });
+        toast({ title: "Error Updating Ride", description: (typeof error === 'object' && error && 'message' in error) ? (error as any).message : "There was a problem updating your request.", variant: "destructive" });
       } finally {
         setIsSubmitting(false);
       }

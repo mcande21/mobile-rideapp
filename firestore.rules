@@ -12,32 +12,53 @@ service cloud.firestore {
     match /users/{userId} {
       // Any authenticated user can create their own user document.
       // The document ID must match the UID of the user creating it.
-      allow create: if request.auth != null && request.auth.uid == userId;
+      allow create: if request.auth != null && request.auth.uid == userId
+        && request.resource.data.email is string
+        && request.resource.data.role in ['user', 'driver'];
 
       // Only the authenticated user who owns the document can read or update it.
       allow read, update: if request.auth != null && request.auth.uid == userId;
+
+      // Prevent privilege escalation: users cannot set their own role to 'admin'.
+      allow update: if request.auth != null && request.auth.uid == userId
+        && (!('role' in request.resource.data) || request.resource.data.role in ['user', 'driver']);
     }
 
-    // Rules for the 'bookings' collection
+    // Rules for the 'bookings' collection (with nested user/driver objects)
     match /bookings/{bookingId} {
-      // An authenticated user can create a booking for themselves.
-      // The `userId` field in the new document must match their own UID.
+      // An authenticated user can create a booking for themselves (user.id must match auth.uid)
       allow create: if request.auth != null
-                    && request.resource.data.userId == request.auth.uid;
+        && request.resource.data.user.id == request.auth.uid
+        && request.resource.data.pickupLocation is string
+        && request.resource.data.dropoffLocation is string
+        && request.resource.data.dateTime is string
+        && request.resource.data.fare is number
+        && request.resource.data.status in ['pending', 'accepted', 'completed', 'cancelled', 'denied'];
 
-      // A user can read a booking if they are the one who created it OR if they are the driver assigned to it.
-      // Any authenticated user can view the list of pending rides.
-      allow read: if request.auth != null;
+      // Allow read if user is owner, assigned driver, or is a driver (role checked in users collection)
+      allow read: if request.auth != null && (
+        (resource.data.user.id == request.auth.uid) ||
+        (resource.data.driver != null && resource.data.driver.id == request.auth.uid) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver')
+      );
 
       // A booking can be updated by either the user who created it or the driver.
       allow update: if request.auth != null && (
         // Case 1: The user who created the booking is making the update (e.g., to cancel).
-        request.auth.uid == resource.data.userId ||
+        resource.data.user.id == request.auth.uid ||
         // Case 2: The assigned driver is making the update (e.g., to start or complete the ride).
-        request.auth.uid == resource.data.driverId ||
+        (resource.data.driver != null && resource.data.driver.id == request.auth.uid) ||
         // Case 3: A driver is accepting a ride that doesn't have a driver yet.
-        (resource.data.driverId == null && request.resource.data.driverId == request.auth.uid)
-      );
+        (resource.data.driver == null && request.resource.data.driver != null && request.resource.data.driver.id == request.auth.uid)
+      )
+      // Validate allowed fields and types
+      && request.resource.data.user.id is string
+      && request.resource.data.pickupLocation is string
+      && request.resource.data.dropoffLocation is string
+      && request.resource.data.dateTime is string
+      && request.resource.data.fare is number
+      && request.resource.data.status in ['pending', 'accepted', 'completed', 'cancelled', 'denied'];
     }
   }
 }

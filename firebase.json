@@ -1,12 +1,12 @@
 {
   "firestore": {
-    "rules": "'/home/user/studio/firestore.rules'",
-    "indexes": "'/home/user/studio/firestore.indexes.json'"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "storage": {
-    "rules": "'/home/user/studio/storage.rules'"
+    "rules": "storage.rules"
   },
   "database": {
-    "rules": "'/home/user/studio/databse.rules.json'"
+    "rules": "databse.rules.json"
   }
 }
