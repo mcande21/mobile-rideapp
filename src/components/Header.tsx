@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { Car, LogOut, User, Calendar, Check } from "lucide-react";
+import { LogOut, User, Calendar, Check } from "lucide-react";
+import Image from "next/image";
 import { useRideStore } from "@/lib/store";
 import { getAvatarUrl, getAvatarBackgroundColor, getUserInitials } from "@/lib/utils";
 import { Button } from "./ui/button";
@@ -68,7 +69,7 @@ export function Header() {
 
   return (
     <header className="border-b bg-gradient-to-r from-card to-card/80 backdrop-blur-sm">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
+      <div className="container mx-auto flex h-20 items-center justify-between px-4 md:px-6">
         <Link
           href={
             currentUserProfile
@@ -79,19 +80,23 @@ export function Header() {
           }
           className="flex items-center gap-3 hover:opacity-80 transition-opacity duration-200"
         >
-          <div className="p-2.5 bg-gradient-to-br from-primary to-primary/80 rounded-full shadow-lg ring-2 ring-primary/20">
-            <Car className="h-6 w-6 text-primary-foreground drop-shadow-sm" />
-          </div>
-          <h1 className="text-xl font-bold text-foreground tracking-tight">Ride Queue</h1>
+          <Image
+            src="/AJ_logo-03.png"
+            alt="Utopia Rideshare Logo"
+            width={130}
+            height={100}
+            className="rounded-full"
+          />
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">Utopia Rideshare</h1>
         </Link>
         {currentUserProfile && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                className="relative h-12 w-12 rounded-full p-0 ring-2 ring-transparent hover:ring-2 hover:ring-primary/20 transition-all duration-200 hover:scale-105"
+                className="relative h-14 w-14 rounded-full p-0 ring-2 ring-transparent hover:ring-2 hover:ring-primary/20 transition-all duration-200 hover:scale-105"
               >
-                <Avatar className="h-10 w-10 ring-2 ring-background shadow-lg">
+                <Avatar className="h-10 w-10">
                   {getAvatarUrl(currentUserProfile) && (
                     <AvatarImage
                       src={getAvatarUrl(currentUserProfile)}

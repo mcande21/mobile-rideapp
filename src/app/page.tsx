@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useRideStore } from "@/lib/store";
 import { isConfigured } from "@/lib/firebase";
@@ -16,7 +17,7 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Car, LogIn, AlertTriangle, Loader2 } from "lucide-react";
+import { LogIn, AlertTriangle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 function FirebaseNotConfigured() {
@@ -64,7 +65,9 @@ export default function SignInPage() {
 
   useEffect(() => {
     if (!loading && currentUserProfile) {
-      if (currentUserProfile.role === "driver") {
+      if (!currentUserProfile.phoneNumber) {
+        router.replace("/complete-profile");
+      } else if (currentUserProfile.role === "driver") {
         router.replace("/driver");
       } else {
         router.replace("/user");
@@ -113,18 +116,22 @@ export default function SignInPage() {
     <div className="flex items-center justify-center h-full bg-background p-4">
       <Card className="w-full max-w-sm">
         <form onSubmit={handleSignIn}>
-          <CardHeader className="text-center">
-            <div className="mx-auto bg-primary rounded-full p-3 w-fit mb-4">
-              <Car className="h-8 w-8 text-primary-foreground" />
-            </div>
-            <CardTitle>Welcome to Ride Queue</CardTitle>
+            <CardHeader className="text-center flex flex-col items-center">
+            <Image
+              src="/AJ_logo-03.png"
+              alt="Utopia Rideshare Logo"
+              width={140}
+              height={100}
+              className="rounded-full"
+            />
+            <CardTitle>Welcome to Utopia Rideshare</CardTitle>
             <CardDescription>
               Sign in to access your dashboard.
             </CardDescription>
-          </CardHeader>
+            </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="after:content-['*'] after:text-red-500 after:ml-1">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -135,7 +142,7 @@ export default function SignInPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="after:content-['*'] after:text-red-500 after:ml-1">Password</Label>
               <Input
                 id="password"
                 type="password"
@@ -193,14 +200,6 @@ export default function SignInPage() {
                 </Link>
               </p>
             </div>
-          <div className="text-muted-foreground text-xs text-left w-full pt-4 border-t">
-            <p className="font-semibold">Or use a test account:</p>
-            <p>Password is `password123` for both.</p>
-            <ul className="list-disc pl-5 mt-1">
-              <li>User: `alice@example.com`</li>
-              <li>Driver: `charlie@example.com`</li>
-            </ul>
-          </div>
         </CardFooter>
       </Card>
     </div>

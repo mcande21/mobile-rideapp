@@ -17,9 +17,11 @@ import { Label } from "@/components/ui/label";
 import { Loader2, User, Save } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Autocomplete } from "@/components/Autocomplete";
+import { PhoneInput } from "@/components/PhoneInput";
 import { AvatarSelector } from "@/components/AvatarSelector";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { GoogleCalendarSettings } from "@/components/GoogleCalendarSettings";
+import { isValidPhoneNumber } from "libphonenumber-js";
 
 export default function ProfilePage() {
   const {
@@ -79,8 +81,19 @@ export default function ProfilePage() {
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    e.preventDefault();
     setIsSaving(true);
+
+    // Validate phone number
+    if (!phoneNumber || !isValidPhoneNumber(phoneNumber)) {
+      toast({
+        title: "Invalid Phone Number",
+        description: "Please enter a valid phone number.",
+        variant: "destructive",
+      });
+      setIsSaving(false);
+      return;
+    }
+
     try {
       await updateUserProfile({
         name,
@@ -177,7 +190,7 @@ export default function ProfilePage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="name">Full Name</Label>
+              <Label htmlFor="name" className="after:content-['*'] after:text-red-500 after:ml-1">Full Name</Label>
               <Input
                 id="name"
                 type="text"
@@ -187,17 +200,13 @@ export default function ProfilePage() {
                 required
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone Number</Label>
-              <Input
-                id="phone"
-                type="tel"
-                placeholder="123-456-7890"
-                value={phoneNumber}
-                onChange={(e) => setPhoneNumber(e.target.value)}
-                required
-              />
-            </div>
+            <PhoneInput
+              label="Phone Number"
+              value={phoneNumber}
+              onChange={(value) => setPhoneNumber(value || "")}
+              placeholder="Enter your phone number"
+              required
+            />
             <div className="space-y-2">
               <Label htmlFor="home-address">Home Address (Optional)</Label>
               <Autocomplete

@@ -1,0 +1,38 @@
+/* Phone Input Styling */
+.phone-input-container {
+  @apply relative;
+}
+
+.phone-input-container .PhoneInputCountrySelect {
+  @apply absolute left-0 top-0 h-10 border-0 bg-transparent focus:ring-0 focus:outline-none;
+  z-index: 1;
+}
+
+.phone-input-container .PhoneInputCountrySelectArrow {
+  @apply opacity-50;
+}
+
+.phone-input-container .PhoneInputCountryIcon {
+  @apply w-5 h-5;
+}
+
+.phone-input-container .PhoneInputInput {
+  @apply pl-16;
+}
+
+.phone-input-container.phone-input-error .PhoneInputInput {
+  @apply border-red-500 focus-visible:ring-red-500;
+}
+
+/* Country select dropdown styling */
+.phone-input-container .PhoneInputCountrySelect:focus + .PhoneInputInput {
+  @apply ring-2 ring-ring ring-offset-2;
+}
+
+/* Ensure proper spacing and alignment */
+.phone-input-container .PhoneInputCountrySelect select {
+  @apply appearance-none bg-transparent border-0 focus:ring-0 focus:outline-none cursor-pointer;
+  width: 60px;
+  padding-left: 8px;
+  padding-right: 24px;
+}

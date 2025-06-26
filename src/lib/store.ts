@@ -113,13 +113,32 @@ export const useRideStore = create<RideState>((set, get) => ({
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       set({ currentUser: user });
       if (user) {
+        // Try to get user document with retry mechanism for new users
+        let userDoc;
+        let retries = 3;
         const userDocRef = doc(db!, "users", user.uid);
-        const userDoc = await getDoc(userDocRef);
-        if (userDoc.exists()) {
+        
+        while (retries > 0) {
+          userDoc = await getDoc(userDocRef);
+          if (userDoc.exists()) {
+            break;
+          }
+          
+          // If document doesn't exist, wait a bit and retry
+          // This handles the case where Google sign-up is still creating the document
+          if (retries > 1) {
+            await new Promise(resolve => setTimeout(resolve, 500));
+          }
+          retries--;
+        }
+        
+        if (userDoc && userDoc.exists()) {
           set({
             currentUserProfile: { id: user.uid, ...userDoc.data() } as User,
           });
         } else {
+          // If user document still doesn't exist after retries, set to null
+          // This will trigger the sign-in page logic
           set({ currentUserProfile: null });
         }
 
@@ -176,10 +195,19 @@ export const useRideStore = create<RideState>((set, get) => ({
       const userDoc = await getDoc(userDocRef);
 
       if (!userDoc.exists()) {
-        await setDoc(doc(db, "users", user.uid), {
+        // Create new user profile without phoneNumber so they're redirected to complete-profile
+        const newUserData = {
           name: user.displayName || "New User",
-          role: "user",
+          role: "user" as UserRole,
           avatarUrl: user.photoURL || `https://placehold.co/100x100.png`,
+          // Deliberately omitting phoneNumber so the complete-profile flow triggers
+        };
+        
+        await setDoc(userDocRef, newUserData);
+        
+        // Immediately set the user profile in the store to avoid race condition
+        set({
+          currentUserProfile: { id: user.uid, ...newUserData } as User,
         });
       }
     } catch (error) {

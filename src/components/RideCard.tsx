@@ -294,24 +294,26 @@ export function RideCard({
               <CardTitle className="text-lg">{ride.user.name}</CardTitle>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            {showVenmoButton && (
-              <Button
-                onClick={handlePayWithVenmo}
-                className="bg-blue-500 hover:bg-blue-600 text-white h-8"
-              >
-                Pay with Venmo
-              </Button>
-            )}
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+              {showVenmoButton && (
+                <Button
+                  onClick={handlePayWithVenmo}
+                  className="bg-blue-500 hover:bg-blue-600 text-white h-8"
+                >
+                  Pay with Venmo
+                </Button>
+              )}
+              {ride.isPaid && (
+                <Badge className="bg-green-500 hover:bg-green-600">PAID</Badge>
+              )}
+              <Badge variant={getStatusVariant(ride.status)} className="capitalize">
+                {ride.status}
+              </Badge>
+            </div>
             {ride.status === "accepted" && (
               <GoogleCalendarButton ride={ride} />
             )}
-            {ride.isPaid && (
-              <Badge className="bg-green-500 hover:bg-green-600">PAID</Badge>
-            )}
-            <Badge variant={getStatusVariant(ride.status)} className="capitalize">
-              {ride.status}
-            </Badge>
           </div>
         </div>
       </CardHeader>

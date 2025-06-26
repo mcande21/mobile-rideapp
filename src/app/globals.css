@@ -14,19 +14,19 @@ body {
     --card-foreground: 222 47% 11%;
     --popover: 0 0% 100%;
     --popover-foreground: 222 47% 11%;
-    --primary: 200 89% 52%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 24 94% 54%;
+    --primary-foreground: 24 94% 98%;
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222 47% 11%;
     --muted: 210 40% 96.1%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 217 91% 60%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 24 94% 54%;
+    --accent-foreground: 24 94% 98%;
     --destructive: 0 84.2% 60.2%;
     --destructive-foreground: 0 0% 98%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 217 91% 60%;
+    --ring: 24 94% 54%;
     --chart-1: 12 76% 61%;
     --chart-2: 173 58% 39%;
     --chart-3: 197 37% 24%;
@@ -41,19 +41,19 @@ body {
     --card-foreground: 210 40% 98%;
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 98%;
-    --primary: 200 89% 52%;
-    --primary-foreground: 210 40% 98%;
+    --primary: 24 94% 54%;
+    --primary-foreground: 24 94% 98%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
     --muted: 217.2 32.6% 17.5%;
     --muted-foreground: 215 20.2% 65.1%;
-    --accent: 217.2 91.2% 59.8%;
-    --accent-foreground: 210 40% 98%;
+    --accent: 24 94% 54%;
+    --accent-foreground: 24 94% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 217.2 91.2% 59.8%;
+    --ring: 24 94% 54%;
     --chart-1: 220 70% 50%;
     --chart-2: 160 60% 45%;
     --chart-3: 30 80% 55%;
@@ -69,4 +69,126 @@ body {
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Phone Input Styling */
+.PhoneInputCountrySelect {
+  position: absolute !important;
+  left: 8px !important;
+  top: 50% !important;
+  transform: translateY(-50%) !important;
+  z-index: 10 !important;
+  display: flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+  height: 32px !important;
+  padding: 4px 6px !important;
+  background: hsl(var(--background)) !important;
+  border: 1px solid hsl(var(--border)) !important;
+  border-radius: 6px !important;
+  outline: none !important;
+  cursor: pointer !important;
+  font-size: 14px !important;
+  font-family: inherit !important;
+  color: hsl(var(--foreground)) !important;
+  transition: all 0.15s ease-in-out !important;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05) !important;
+}
+
+.PhoneInputCountrySelect:hover {
+  background: hsl(var(--muted)) !important;
+  border-color: hsl(var(--border)) !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1) !important;
+}
+
+.PhoneInputCountrySelect:focus {
+  outline: none !important;
+  background: hsl(var(--background)) !important;
+  border-color: hsl(var(--ring)) !important;
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2) !important;
+}
+
+.PhoneInputCountryIcon {
+  width: 20px !important;
+  height: 15px !important;
+  object-fit: cover !important;
+  border-radius: 2px !important;
+  border: 1px solid hsl(var(--border) / 0.3) !important;
+  opacity: 0.95 !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+.PhoneInputCountrySelect:hover .PhoneInputCountryIcon {
+  opacity: 1 !important;
+  border-color: hsl(var(--border)) !important;
+}
+
+.PhoneInputCountrySelectArrow {
+  width: 12px !important;
+  height: 12px !important;
+  margin-left: 2px !important;
+  opacity: 0.7 !important;
+  color: hsl(var(--muted-foreground)) !important;
+  transition: all 0.15s ease-in-out !important;
+}
+
+.PhoneInputCountrySelect:hover .PhoneInputCountrySelectArrow {
+  opacity: 0.9 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.PhoneInputCountrySelect:focus .PhoneInputCountrySelectArrow {
+  opacity: 1 !important;
+  color: hsl(var(--foreground)) !important;
+}
+
+.PhoneInputCountrySelect select {
+  position: absolute !important;
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  opacity: 0 !important;
+  cursor: pointer !important;
+  appearance: none !important;
+  border: none !important;
+  outline: none !important;
+  background: transparent !important;
+}
+
+.PhoneInputCountrySelect:focus + .PhoneInputInput {
+  outline: none !important;
+  border-color: hsl(var(--ring)) !important;
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2) !important;
+}
+
+/* Enhanced input styling */
+.PhoneInputInput {
+  transition: all 0.15s ease-in-out !important;
+}
+
+.PhoneInputInput:hover {
+  border-color: hsl(var(--border)) !important;
+}
+
+.PhoneInputInput:focus {
+  border-color: hsl(var(--ring)) !important;
+  box-shadow: 0 0 0 2px hsl(var(--ring) / 0.2) !important;
+}
+
+/* Disabled state for country selector */
+.PhoneInputCountrySelect:has(+ .PhoneInputInput:disabled) {
+  opacity: 0.5 !important;
+  cursor: not-allowed !important;
+  background: hsl(var(--muted)) !important;
+}
+
+/* Error state for country selector */
+.PhoneInputInput[class*="border-red-500"] ~ .PhoneInputCountrySelect,
+.PhoneInputInput.border-red-500 ~ .PhoneInputCountrySelect {
+  border-color: hsl(var(--destructive)) !important;
+}
+
+.PhoneInputInput[class*="border-red-500"]:focus ~ .PhoneInputCountrySelect,
+.PhoneInputInput.border-red-500:focus ~ .PhoneInputCountrySelect {
+  box-shadow: 0 0 0 2px hsl(var(--destructive) / 0.2) !important;
 }

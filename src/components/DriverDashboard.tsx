@@ -123,10 +123,14 @@ export function DriverDashboard() {
   };
 
   const newRequests = rides.filter((ride) => ride.status === "pending");
-  const acceptedRides = rides.filter((ride) => ride.status === "accepted");
-  const cancelledRidesWithFee = rides.filter((ride) => 
-    ride.status === "cancelled" && ride.cancellationFeeApplied
-  );
+  const acceptedRides = rides
+    .filter((ride) => ride.status === "accepted")
+    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+  const cancelledRidesWithFee = rides
+    .filter((ride) => 
+      ride.status === "cancelled" && ride.cancellationFeeApplied
+    )
+    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
   const completedRides = rides.filter((ride) => ride.status === "completed");
 
   if (!isClient) {

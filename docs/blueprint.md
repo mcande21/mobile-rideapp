@@ -1,9 +1,9 @@
-# **App Name**: Ride Queue
+# **App Name**: Utopia Rideshare
 
 ## Core Features:
 
 - Location Input & Fare Calculation: Allows users to provide pickup and drop-off locations with address autocomplete and calculates the ride fare in real-time based on distance and trip type.
-- Driver Ride Queue: Drivers have a dedicated view to see their accepted, scheduled rides in chronological order. They can also see and accept or reject new ride requests from a separate queue.
+- Driver Dashboard: Drivers have a dedicated view to see their accepted, scheduled rides in chronological order. They can also see and accept or reject new ride requests from a separate queue.
 - Ride Cancellation: Users can cancel a previously scheduled ride, which may include a cancellation fee depending on the ride's status.
 - Scheduling Logic: The app handles the entire ride lifecycle, from the user's initial request and confirmation to the driver accepting the ride. All data is managed in real-time with a Firestore database.
 

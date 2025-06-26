@@ -5,7 +5,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { ClientLayout } from "@/components/ClientLayout";
 
 export const metadata: Metadata = {
-  title: "Ride Queue",
+  title: "Utopia Rideshare",
   description: "Schedule and manage your rides with ease.",
 };
 

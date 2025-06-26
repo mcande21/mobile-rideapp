@@ -453,9 +453,11 @@ export function UserDashboard() {
 
   const userRides = rides.filter((ride) => ride.user.id === currentUserProfile?.id);
   const pendingRides = userRides.filter((ride) => ride.status === "pending");
-  const scheduledRides = userRides.filter((ride) => 
-    ride.status === "accepted" || (ride.status === "cancelled" && ride.cancellationFeeApplied)
-  );
+  const scheduledRides = userRides
+    .filter((ride) => 
+      ride.status === "accepted" || (ride.status === "cancelled" && ride.cancellationFeeApplied)
+    )
+    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
   const completedRides = userRides.filter((ride) => ride.status === "completed");
   const deniedRides = userRides.filter((ride) => ride.status === "denied");
 
