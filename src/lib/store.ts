@@ -70,7 +70,8 @@ interface RideState {
       returnTime?: string; // Optional for round trip
       tripLabel?: "Outbound" | "Return"; // For transport hub round trips
       linkedTripId?: string; // ID of linked trip
-    }
+    },
+    stops?: string[] // <-- add stops param
   ) => Promise<void>;
   updateRide: (
     rideId: string,
@@ -84,7 +85,8 @@ interface RideState {
       direction?: Direction;
       isRoundTrip?: boolean;
       returnTime?: string; // Optional for round trip
-    }
+    },
+    stops?: string[] // <-- add stops param
   ) => Promise<void>;
   acceptRide: (id: string) => Promise<void>;
   rejectRide: (id: string) => Promise<void>;
@@ -271,18 +273,24 @@ export const useRideStore = create<RideState>((set, get) => ({
     pickup,
     dropoff,
     fare,
-    details
+    details,
+    stops // <-- add stops param
   ) => {
     const { currentUserProfile } = get();
     if (!currentUserProfile || !db) return;
 
     try {
+      // Pass stops as intermediates to directions API
+      const directionsBody: any = { origin: pickup, destination: dropoff };
+      if (stops && stops.length > 0) {
+        directionsBody["intermediates"] = stops;
+      }
       const directionsResponse = await fetch("/api/directions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ origin: pickup, destination: dropoff }),
+        body: JSON.stringify(directionsBody),
       });
 
       if (!directionsResponse.ok) {
@@ -314,6 +322,7 @@ export const useRideStore = create<RideState>((set, get) => ({
         createdAt: serverTimestamp(),
         ...otherDetails,
         duration: durationMinutes || 60, // Fallback to 60 minutes
+        ...(stops && stops.length > 0 ? { stops } : {}), // Add stops if present
       };
 
       if (transportType) {
@@ -339,16 +348,22 @@ export const useRideStore = create<RideState>((set, get) => ({
     pickup,
     dropoff,
     fare,
-    details
+    details,
+    stops // <-- add stops param
   ) => {
     if (!db) return;
     try {
+      // Pass stops as intermediates to directions API
+      const directionsBody: any = { origin: pickup, destination: dropoff };
+      if (stops && stops.length > 0) {
+        directionsBody["intermediates"] = stops;
+      }
       const directionsResponse = await fetch("/api/directions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ origin: pickup, destination: dropoff }),
+        body: JSON.stringify(directionsBody),
       });
 
       if (!directionsResponse.ok) {
@@ -377,6 +392,12 @@ export const useRideStore = create<RideState>((set, get) => ({
         updateData.returnTime = (details as any).returnTime;
       } else {
         updateData.returnTime = deleteField();
+      }
+      // Add stops if present
+      if (stops && stops.length > 0) {
+        updateData.stops = stops;
+      } else {
+        updateData.stops = deleteField();
       }
       await updateDoc(rideRef, updateData);
     } catch (error) {

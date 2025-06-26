@@ -86,13 +86,15 @@ const trainStationAddresses = {
  * @param dropoffLocation The destination of the trip.
  * @param timeRequested The requested time for the trip.
  * @param isRoundTrip Whether the trip is a round trip.
+ * @param stops An optional array of intermediate stops for the trip.
  * @returns The calculated fare.
  */
 export async function calculateTripFare(
   pickupLocation: string,
   dropoffLocation: string,
   timeRequested: Date,
-  isRoundTrip: boolean
+  isRoundTrip: boolean,
+  stops?: string[] // New optional parameter for stops/intermediates
 ): Promise<number> {
   // Fetch mileage from the directions API
   const directionsResponse = await fetch("/api/directions", {
@@ -104,6 +106,7 @@ export async function calculateTripFare(
       origin: pickupLocation,
       destination: dropoffLocation,
       departureTime: timeRequested.toISOString(), // Always send ISO 8601 string
+      ...(stops && stops.length > 0 ? { intermediates: stops } : {})
     }),
   });
 
@@ -299,14 +302,13 @@ export async function calculateTransportRoundTripFare(
   pickupLocation: string,
   dropoffLocation: string,
   outboundTime: Date,
-  returnTime: Date
+  returnTime: Date,
+  stops?: string[] // New optional parameter for stops/intermediates
 ): Promise<{ total: number; outbound: number; return: number }> {
   // Calculate outbound trip (pickup -> dropoff)
-  const outboundFare = await calculateTripFare(pickupLocation, dropoffLocation, outboundTime, false);
-  
+  const outboundFare = await calculateTripFare(pickupLocation, dropoffLocation, outboundTime, false, stops);
   // Calculate return trip (dropoff -> pickup)
-  const returnFare = await calculateTripFare(dropoffLocation, pickupLocation, returnTime, false);
-  
+  const returnFare = await calculateTripFare(dropoffLocation, pickupLocation, returnTime, false, stops);
   return {
     total: outboundFare + returnFare,
     outbound: outboundFare,

@@ -124,6 +124,14 @@ export function UserDashboard() {
   const [fareBreakdown, setFareBreakdown] = useState<{ outbound: number; return: number } | null>(null);
   const [isCalculatingFare, setIsCalculatingFare] = useState(false);
 
+  // --- Stops Along the Way ---
+  const [stops, setStops] = useState<string[]>([]);
+  const handleAddStop = () => setStops([...stops, ""]);
+  const handleRemoveStop = (idx: number) => setStops(stops.filter((_, i) => i !== idx));
+  const handleStopChange = (idx: number, value: string) => {
+    setStops(stops.map((stop, i) => (i === idx ? value : stop)));
+  };
+
   // Auto-show transport section when transport locations are detected
   const shouldShowTransportSection = isTransportLocation(pickup) || isTransportLocation(dropoff);
 
@@ -336,7 +344,8 @@ export function UserDashboard() {
               pickup,
               dropoff,
               combinedDateTime,
-              returnDateTime
+              returnDateTime,
+              stops // Pass stops/intermediates
             );
             
             setFare(breakdown.total);
@@ -347,7 +356,8 @@ export function UserDashboard() {
               pickup,
               dropoff,
               combinedDateTime,
-              isRoundTrip
+              isRoundTrip,
+              stops // Pass stops/intermediates
             );
             setFare(calculatedFare);
             setFareBreakdown(null);
@@ -377,7 +387,7 @@ export function UserDashboard() {
     };
     const handler = setTimeout(calculate, 500);
     return () => clearTimeout(handler);
-  }, [pickup, dropoff, date, time, isRoundTrip, returnDate, returnTime]);
+  }, [pickup, dropoff, date, time, isRoundTrip, returnDate, returnTime, stops]);
 
   // Fare calculation for editing ride
   useEffect(() => {
@@ -393,7 +403,8 @@ export function UserDashboard() {
             editPickup,
             editDropoff,
             combinedDateTime,
-            editIsRoundTrip
+            editIsRoundTrip,
+            stops // Pass stops/intermediates for edit as well
           );
           setEditFare(calculatedFare);
         } catch (error) {
@@ -408,7 +419,7 @@ export function UserDashboard() {
     };
     const handler = setTimeout(calculate, 500);
     return () => clearTimeout(handler);
-  }, [editPickup, editDropoff, editDate, editTime, editIsRoundTrip]);
+  }, [editPickup, editDropoff, editDate, editTime, editIsRoundTrip, stops]);
 
   const handleRequestRide = async (values: RideFormData) => {
     if (date && time && fare !== null) {
@@ -437,7 +448,7 @@ export function UserDashboard() {
             transportType: transportType && transportNumber ? transportType : "",
             transportNumber: transportType && transportNumber ? transportNumber : "",
             tripLabel: "Outbound",
-          });
+          }, stops);
           
           // Return trip (dropoff -> pickup) 
           await addRide(values.dropoff, values.pickup, fareBreakdown.return + returnDayFee, {
@@ -447,7 +458,7 @@ export function UserDashboard() {
             transportType: transportType && returnTransportNumber ? transportType : "",
             transportNumber: transportType && returnTransportNumber ? returnTransportNumber : "",
             tripLabel: "Return",
-          });
+          }, stops);
           
           toast({ 
             title: "Transport Trips Requested!", 
@@ -464,7 +475,7 @@ export function UserDashboard() {
             transportNumber: transportType && transportNumber ? transportNumber : "",
             // Handle return time for regular round trips
             ...(isRoundTrip && !shouldShowTransportSection && returnTime ? { returnTime } : {}),
-          });
+          }, stops);
           
           toast({ title: "Ride Requested!", description: "We are finding a driver for you." });
         }
@@ -484,6 +495,7 @@ export function UserDashboard() {
         setFare(null); 
         setFareBreakdown(null);
         setDayOfFee(0);
+        setStops([]); // Reset stops
       } catch (error) {
         console.error("Error requesting ride:", error);
         toast({ title: "Error Requesting Ride", description: "There was a problem submitting your request.", variant: "destructive" });
@@ -565,7 +577,7 @@ export function UserDashboard() {
       toast({ title: "Error", description: "Could not cancel the ride.", variant: "destructive" });
     }
   };
-
+  
   const userRides = rides.filter((ride) => ride.user.id === currentUserProfile?.id);
   const pendingRides = userRides.filter((ride) => ride.status === "pending");
   const scheduledRides = userRides
@@ -600,6 +612,29 @@ export function UserDashboard() {
               <form onSubmit={form.handleSubmit(handleRequestRide)} className="space-y-4">
                 <Autocomplete control={form.control} name="pickup" label="Pickup Location" placeholder="e.g., 123 Main St" />
                 <Autocomplete control={form.control} name="dropoff" label="Drop-off Location" placeholder="e.g., Anytown Airport" />
+                {/* Stops Along the Way */}
+                <div className="space-y-2">
+                  <Label>Stops Along the Way (optional)</Label>
+                  {stops.map((stop, idx) => (
+                    <div key={idx} className="flex gap-2 items-center">
+                      <div className="flex-1">
+                        <Autocomplete
+                          value={stop}
+                          onChange={value => handleStopChange(idx, value)}
+                          name={`stop-${idx}`}
+                          label={``}
+                          placeholder={`Stop #${idx + 1}`}
+                        />
+                      </div>
+                      <Button type="button" variant="destructive" size="icon" onClick={() => handleRemoveStop(idx)}>
+                        &times;
+                      </Button>
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" onClick={handleAddStop}>
+                    + Add Stop
+                  </Button>
+                </div>
                 <div className="flex gap-4">
                   <div className="space-y-2 flex-1">
                     <Label htmlFor="date">Date</Label>

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { decryptWoodstockAddress } from "../../../../src/lib/woodstock-crypto";
 
 export async function POST(req: Request) {
-  let { origin, destination, departureTime } = await req.json();
+  let { origin, destination, departureTime, intermediates } = await req.json();
 
   // Decrypt Woodstock address if token is used
   const ENCRYPTED_WOODSTOCK_ADDRESS = process.env.ENCRYPTED_WOODSTOCK_ADDRESS;
@@ -28,6 +28,13 @@ export async function POST(req: Request) {
     if (!apiKey) {
       return NextResponse.json({ error: "Routes API key not set." }, { status: 500 });
     }
+
+    // Prepare intermediates for Google API if provided
+    let intermediatesArr = undefined;
+    if (Array.isArray(intermediates) && intermediates.length > 0) {
+      intermediatesArr = intermediates.map((address: string) => ({ address }));
+    }
+
     const response = await fetch(
       "https://routes.googleapis.com/directions/v2:computeRoutes",
       {
@@ -42,7 +49,8 @@ export async function POST(req: Request) {
           destination: { address: destination },
           travelMode: "DRIVE",
           routingPreference: "TRAFFIC_AWARE_OPTIMAL",
-          departureTime: departureTime ? departureTime : undefined
+          departureTime: departureTime ? departureTime : undefined,
+          ...(intermediatesArr ? { intermediates: intermediatesArr } : {})
         })
       }
     );

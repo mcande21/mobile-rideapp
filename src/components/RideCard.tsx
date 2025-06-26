@@ -338,18 +338,31 @@ export function RideCard({
         </div>
       </CardHeader>
       <CardContent className="space-y-4 flex-1">
-        <div className="flex items-start gap-3 text-sm">
-          <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-          <div>
-            <span className="font-semibold text-foreground">From:</span>
-            <p className="text-muted-foreground">{currentPickup}</p>
+        {/* Pickup, Stops, Dropoff */}
+        <div className="flex flex-col gap-0.5 text-sm">
+          <div className="flex items-start gap-3">
+            <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
+            <div>
+              <span className="font-semibold text-foreground">From:</span>
+              <span className="text-muted-foreground ml-1">{currentPickup}</span>
+            </div>
           </div>
-        </div>
-        <div className="flex items-start gap-3 text-sm">
-          <MapPin className="h-5 w-5 text-muted-foreground mt-0.5" />
-          <div>
-            <span className="font-semibold text-foreground">To:</span>
-            <p className="text-muted-foreground">{currentDropoff}</p>
+          {ride.stops && ride.stops.length > 0 && (
+            <div className="flex flex-col items-start ml-8 mt-0.5">
+              {ride.stops.map((stop, idx) => (
+                <div key={idx} className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span className="mx-1 text-lg leading-none text-muted-foreground" style={{fontWeight: 'bold', lineHeight: '1'}}>&#8942;</span>
+                  <span className="text-xs">{stop}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex items-start gap-3 mt-0.5">
+            <MapPin className="h-5 w-5 text-muted-foreground mt-0.5 invisible" />
+            <div>
+              <span className="font-semibold text-foreground">To:</span>
+              <span className="text-muted-foreground ml-1">{currentDropoff}</span>
+            </div>
           </div>
         </div>
         <div className="flex items-center gap-3 text-sm">
@@ -478,9 +491,11 @@ export function RideCard({
                   Est. Duration:
                 </span>
                 <span className="text-muted-foreground ml-2">
-                  {ride.isRoundTrip
-                    ? `${formatDuration(ride.duration)} / ${formatDuration(ride.duration)}`
-                    : formatDuration(ride.duration)
+                  {ride.stops && ride.stops.length > 0
+                    ? formatDuration(ride.duration)
+                    : ride.isRoundTrip
+                      ? `${formatDuration(ride.duration)} / ${formatDuration(ride.duration)}`
+                      : formatDuration(ride.duration)
                   }
                 </span>
               </div>
