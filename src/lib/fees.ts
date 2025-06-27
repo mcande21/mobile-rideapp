@@ -1,5 +1,5 @@
 // src/lib/fees.ts
-import { airportAddresses } from "./fare";
+import { airportAddresses } from "@/lib/fare";
 
 export function isAirportRide(pickup: string, dropoff: string): boolean {
   return Object.values(airportAddresses).some((list: string[]) => list.includes(pickup) || list.includes(dropoff));

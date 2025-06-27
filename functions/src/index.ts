@@ -167,7 +167,7 @@ export const completeRide = onCall(async (request) => {
   return {removed: false};
 });
 
-// Update Ride Fare
+// Update Ride Fare (driver add-on only)
 export const updateRideFare = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Not signed in.");
@@ -184,35 +184,53 @@ export const updateRideFare = onCall(async (request) => {
     );
   }
 
-  await db.doc(`rides/${rideId}`).update({fare: newFare});
+  const rideRef = db.doc(`rides/${rideId}`);
+  const rideDoc = await rideRef.get();
+  if (!rideDoc.exists) {
+    throw new HttpsError("not-found", "Ride not found.");
+  }
+  const ride = rideDoc.data()!;
+  if (!ride.fees || typeof ride.fees.base !== "number") {
+    throw new HttpsError(
+        "failed-precondition", "Ride fees are not set up correctly.",
+    );
+  }
+  // Calculate driver add-on as the difference
+  const currentTotal = Object.values(ride.fees)
+      .reduce((s: number, v) => s + (typeof v === "number" ? v : 0), 0);
+  const driverAddon = Number(
+      (newFare - (currentTotal - (ride.fees.driver_addon || 0))).toFixed(2),
+  );
+  if (driverAddon < 0) {
+    throw new HttpsError("invalid-argument",
+        "Driver add-on cannot be negative.");
+  }
+  const updatedFees = {
+    ...ride.fees,
+    "driver_addon": driverAddon,
+  };
+  await rideRef.update({fees: updatedFees});
   return {success: true};
 });
 
 // Mark as Paid
 export const markAsPaid = onCall(async (request) => {
-  console.log('[markAsPaid] request.auth:', request.auth);
-  console.log('[markAsPaid] request.data:', request.data);
   if (!request.auth) {
-    console.error('[markAsPaid] Not signed in.');
     throw new HttpsError("unauthenticated", "Not signed in.");
   }
 
   const uid = request.auth.uid;
   const driver = await isDriver(uid);
-  console.log('[markAsPaid] driver:', driver);
   const rideId = request.data.rideId;
   const rideRef = db.doc(`rides/${rideId}`);
   const rideDoc = await rideRef.get();
 
   if (!rideDoc.exists) {
-    console.error('[markAsPaid] Ride not found:', rideId);
     throw new HttpsError("not-found", "Ride not found.");
   }
 
   const ride = rideDoc.data()!;
-  console.log('[markAsPaid] ride:', ride);
   if (ride.driver?.id !== driver.id) {
-    console.error('[markAsPaid] Permission denied. ride.driver.id:', ride.driver?.id, 'driver.id:', driver.id);
     throw new HttpsError(
         "permission-denied",
         "Only the driver can mark a ride as paid.",
@@ -220,7 +238,6 @@ export const markAsPaid = onCall(async (request) => {
   }
 
   await rideRef.update({isPaid: true});
-  console.log('[markAsPaid] Ride marked as paid:', rideId);
   return {success: true};
 });
 
@@ -263,7 +280,7 @@ export const addComment = onCall(async (request) => {
   return {success: true};
 });
 
-// General Edit Ride (drivers can edit any field, users can edit any field except fare)
+// General Edit Ride
 export const editRide = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Not signed in.");
@@ -292,14 +309,76 @@ export const editRide = onCall(async (request) => {
   const isDriver = user.role === "driver";
   const isUser = ride.user?.id === uid;
   if (!isDriver && !isUser) {
-    throw new HttpsError("permission-denied", "Not allowed to edit this ride.");
+    throw new HttpsError(
+        "permission-denied",
+        "Not allowed to edit this ride.",
+    );
   }
 
-  // If not a driver, block fare changes
-  if (!isDriver && "fare" in updates && updates.fare !== ride.fare) {
-    throw new HttpsError("permission-denied", "Only drivers can change the fare.");
+  // If not a driver, block changes to any fees
+  if (!isDriver && ("fees" in updates)) {
+    throw new HttpsError(
+        "permission-denied",
+        "Only drivers can change fees.",
+    );
+  }
+  // If driver, only allow updating driver_addon in fees
+  if (isDriver && "fees" in updates) {
+    const allowedKeys = ["driver_addon"];
+    const updateFees = updates.fees || {};
+    const newFees = {...ride.fees};
+    for (const key of Object.keys(updateFees)) {
+      if (!allowedKeys.includes(key)) {
+        throw new HttpsError(
+            "permission-denied",
+            `Drivers can only update: ${allowedKeys.join(", ")}`,
+        );
+      }
+      newFees[key] = Number(updateFees[key].toFixed(2));
+    }
+    updates.fees = newFees;
   }
 
   await rideRef.update(updates);
+  return {success: true};
+});
+
+// Reschedule Ride (user can reschedule and fee is applied securely)
+export const rescheduleRide = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Not signed in.");
+  }
+  const uid = request.auth.uid;
+  const {rideId, newDateTime, rescheduleFee, newFare} = request.data;
+
+  if (!rideId || !newDateTime || typeof newFare !== "number") {
+    throw new HttpsError("invalid-argument", "Missing required fields.");
+  }
+
+  const rideRef = db.doc(`rides/${rideId}`);
+  const rideDoc = await rideRef.get();
+  if (!rideDoc.exists) throw new HttpsError("not-found", "Ride not found.");
+  const ride = rideDoc.data();
+  if (!ride || ride.user.id !== uid) {
+    throw new HttpsError("permission-denied", "Not your ride.");
+  }
+
+  // Use the new fees object, fallback to old fare if needed
+  let fees = ride.fees || {base: ride.fare || 0};
+  // Update reschedule fee
+  fees = {
+    ...fees,
+    reschedule: rescheduleFee || 0,
+  };
+  // Optionally, recalculate driver_addon or other fees if necessary
+  const totalFare = Object.values(fees)
+      .reduce((sum: number, v) => sum + (typeof v === "number" ? v : 0), 0);
+  await rideRef.update({
+    dateTime: newDateTime,
+    fare: totalFare,
+    fees: fees,
+    status: "pending",
+    isRevised: true,
+  });
   return {success: true};
 });

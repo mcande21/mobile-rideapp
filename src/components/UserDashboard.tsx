@@ -1,106 +1,70 @@
-"use client";
-
+// --- Imports ---
 import { useState, useEffect } from "react";
 import { useRideStore } from "@/lib/store";
-import { RideCard } from "./RideCard";
+import { RideCard } from "@/components/RideCard";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
+  Card, CardContent, CardDescription, CardHeader, CardTitle
 } from "./ui/card";
 import { Input } from "./ui/input";
 import { Button } from "./ui/button";
 import { Separator } from "./ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger
 } from "@/components/ui/alert-dialog";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-  DialogClose,
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose
 } from "@/components/ui/dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/popover";
 import { Calendar } from "./ui/calendar";
 import { Label } from "./ui/label";
-import { RadioGroup, RadioGroupItem } from "./ui/radio-group";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
+  Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "./ui/select";
 import { Switch } from "./ui/switch";
 import { cn } from "@/lib/utils";
 import { format, parseISO } from "date-fns";
 import {
-  Car,
-  Loader2,
-  Calendar as CalendarIcon,
-  Plane,
-  Train,
-  Bus,
-  BadgeDollarSign,
-  Edit,
-  Save,
-  Clock as ClockIcon,
+  Car, Loader2, Calendar as CalendarIcon, Plane, Train, Bus, BadgeDollarSign, Edit, Save, Clock as ClockIcon
 } from "lucide-react";
 import type { Direction, TransportType, Ride } from "@/lib/types";
-import { useForm, Controller } from "react-hook-form";
+import { useForm } from "react-hook-form";
 import { Autocomplete } from "./Autocomplete";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { calculateTripFare, isTransportLocation, calculateTransportRoundTripFare } from "@/lib/fare";
+import { getTotalFare } from "../lib/types";
 
+// --- Constants & Types ---
 const rideFormSchema = z.object({
   pickup: z.string().min(1, "Pickup location is required"),
   dropoff: z.string().min(1, "Drop-off location is required"),
 });
-
 type RideFormData = z.infer<typeof rideFormSchema>;
 
+// --- Main Component ---
 export function UserDashboard() {
-  const { rides, addRide, cancelRide, updateRide, currentUserProfile, cleanupOldDeniedRides } =
-    useRideStore();
+  // --- Store & State ---
+  const { rides, addRide, cancelRide, updateRide, rescheduleRide, currentUserProfile, cleanupOldDeniedRides } = useRideStore();
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
-  // Edit state
+  // --- Form State ---
+  const form = useForm<RideFormData>({ resolver: zodResolver(rideFormSchema), defaultValues: { pickup: "", dropoff: "" } });
+  const editForm = useForm<RideFormData>({ resolver: zodResolver(rideFormSchema), defaultValues: { pickup: "", dropoff: "" } });
+
+  // --- UI State ---
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [editingRide, setEditingRide] = useState<Ride | null>(null);
 
-  const form = useForm<RideFormData>({
-    resolver: zodResolver(rideFormSchema),
-    defaultValues: { pickup: "", dropoff: "" },
-  });
-
-  const editForm = useForm<RideFormData>({
-    resolver: zodResolver(rideFormSchema),
-    defaultValues: { pickup: "", dropoff: "" },
-  });
-
-  // --- Move these lines up so they're declared before any useEffect that uses them ---
+  // --- Watchers ---
   const pickup = form.watch("pickup");
   const dropoff = form.watch("dropoff");
   const editPickup = editForm.watch("pickup");
   const editDropoff = editForm.watch("dropoff");
 
+  // --- Ride Form State ---
   // New: error state for invalid date/time
   const [dateTimeError, setDateTimeError] = useState<string>("");
   const [editDateTimeError, setEditDateTimeError] = useState<string>("");
@@ -392,6 +356,8 @@ export function UserDashboard() {
 
   // Fare calculation for editing ride
   useEffect(() => {
+    // Only recalculate fare if the current user is a driver
+    if (!currentUserProfile || currentUserProfile.role !== 'driver') return;
     const calculate = async () => {
       if (editPickup && editDropoff && editDate && editTime) {
         setIsCalculatingEditFare(true);
@@ -420,7 +386,7 @@ export function UserDashboard() {
     };
     const handler = setTimeout(calculate, 500);
     return () => clearTimeout(handler);
-  }, [editPickup, editDropoff, editDate, editTime, editIsRoundTrip, stops]);
+  }, [editPickup, editDropoff, editDate, editTime, editIsRoundTrip, stops, currentUserProfile]);
 
   // --- Enhanced validation for stops and transport details ---
   function validateRideForm(values: RideFormData) {
@@ -566,7 +532,7 @@ export function UserDashboard() {
     setEditDirection(ride.direction || "departure");
     setEditTransportType(ride.transportType || "");
     setEditTransportNumber(ride.transportNumber || "");
-    setEditFare(ride.fare);
+    setEditFare(getTotalFare(ride.fees));
     setIsEditDialogOpen(true);
   };
 
@@ -621,32 +587,43 @@ export function UserDashboard() {
     if (editingRide && editDate && editTime && editFare !== null) {
       setIsSubmitting(true);
       try {
+        // Combine date and time for newDateTime
         const [hours, minutes] = editTime.split(":").map(Number);
-        const combinedDateTime = new Date(editDate);
-        combinedDateTime.setHours(hours, minutes, 0, 0);
-        // Calculate the total adjusted fare (base + day-of + reschedule)
-        const totalAdjustedFare = (editFare ?? 0) + (editDayOfFee ?? 0) + (rescheduleFee ?? 0);
-        await updateRide(
-          editingRide.id,
-          values.pickup,
-          values.dropoff,
-          totalAdjustedFare,
-          {
-            dateTime: combinedDateTime.toISOString(),
-            direction: editDate && editTime ? editDirection : "departure",
-            isRoundTrip: editIsRoundTrip,
-            transportType: editTransportType && editTransportNumber ? editTransportType : "",
-            transportNumber: editTransportType && editTransportNumber ? editTransportNumber : "",
-            returnTime: editIsRoundTrip ? editReturnTime : undefined,
-          }
-        );
+        const newDateTime = new Date(editDate);
+        newDateTime.setHours(hours, minutes, 0, 0);
 
-        toast({ title: "Ride Updated!", description: "Your ride has been sent for re-approval." });
+        // If a reschedule fee is required (e.g., rescheduleFee > 0)
+        if (rescheduleFee > 0) {
+          await rescheduleRide(
+            editingRide.id,
+            newDateTime.toISOString(),
+            rescheduleFee,
+            editFare + rescheduleFee // newFare = fare + fee
+          );
+          toast({ title: "Ride rescheduled with fee applied." });
+        } else {
+          // Only include fare if user is a driver
+          const isDriver = currentUserProfile?.role === 'driver';
+          await updateRide(
+            editingRide.id,
+            values.pickup,
+            values.dropoff,
+            isDriver ? editFare : getTotalFare(editingRide.fees),
+            {
+              dateTime: newDateTime.toISOString(),
+              transportType: editTransportType,
+              transportNumber: editTransportNumber,
+              direction: editDirection,
+              isRoundTrip: editIsRoundTrip,
+              returnTime: editReturnTime,
+            },
+            stops
+          );
+          toast({ title: "Ride updated." });
+        }
         setIsEditDialogOpen(false);
-        setEditingRide(null);
       } catch (error) {
-        console.error("Error updating ride:", error);
-        toast({ title: "Error Updating Ride", description: (typeof error === 'object' && error && 'message' in error) ? (error as any).message : "There was a problem updating your request.", variant: "destructive" });
+        toast({ title: "Failed to update ride", description: String(error), variant: "destructive" });
       } finally {
         setIsSubmitting(false);
       }
@@ -693,6 +670,7 @@ export function UserDashboard() {
   });
   const deniedRides = userRides.filter((ride) => ride.status === "denied");
 
+  // --- Render ---
   if (!isClient) {
     return <div className="flex items-center justify-center h-full"><Loader2 className="h-8 w-8 animate-spin text-primary" /></div>;
   }
@@ -700,47 +678,64 @@ export function UserDashboard() {
   return (
     <>
       <div className="container mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-1">
-          <Card className="max-w-xl mx-auto lg:mx-0">
+        <div className="lg:col-span-2 xl:col-span-2 flex justify-center"> {/* Let the card take up more columns and center on large screens */}
+          <Card className="max-w-md min-w-0 flex-grow mx-auto lg:mx-0"> {/* Set max width smaller and min width to 0 */}
             <CardHeader className="pb-4">
               <CardTitle className="text-xl">Request a Ride</CardTitle>
               <CardDescription className="text-sm">Enter your pickup and drop-off locations.</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              <form onSubmit={form.handleSubmit(handleRequestRide)} className="space-y-4">
-                <Autocomplete control={form.control} name="pickup" label="Pickup Location" placeholder="e.g., 123 Main St" />
-                <Autocomplete control={form.control} name="dropoff" label="Drop-off Location" placeholder="e.g., Anytown Airport" />
+            <CardContent className="space-y-4 p-6">
+              <form onSubmit={form.handleSubmit(handleRequestRide)} className="space-y-6">
+                <div className="space-y-3">
+                  <div className="w-full">
+                    <Autocomplete control={form.control} name="pickup" label="Pickup Location" placeholder="e.g., 123 Main St" />
+                  </div>
+                  <div className="w-full">
+                    <Autocomplete control={form.control} name="dropoff" label="Drop-off Location" placeholder="e.g., Anytown Airport" />
+                  </div>
+                </div>
                 {/* Stops Along the Way */}
                 <div className="space-y-2">
                   <Label>Stops Along the Way (optional)</Label>
-                  {stops.map((stop, idx) => (
-                    <div key={idx} className="flex gap-2 items-center">
-                      <div className="flex-1">
-                        <Autocomplete
-                          value={stop}
-                          onChange={value => handleStopChange(idx, value)}
-                          name={`stop-${idx}`}
-                          label={``}
-                          placeholder={`Stop #${idx + 1}`}
-                        />
+                  <div className="flex flex-col gap-2">
+                    {stops.map((stop, idx) => (
+                      <div key={idx} className="flex gap-2 items-center w-full">
+                        <div className="flex-1 min-w-0">
+                          <div className="w-full">
+                            <Autocomplete
+                              value={stop}
+                              onChange={value => handleStopChange(idx, value)}
+                              name={`stop-${idx}`}
+                              label={``}
+                              placeholder={`Stop #${idx + 1}`}
+                            />
+                          </div>
+                        </div>
+                        <Button type="button" variant="destructive" size="icon" onClick={() => handleRemoveStop(idx)}>
+                          &times;
+                        </Button>
                       </div>
-                      <Button type="button" variant="destructive" size="icon" onClick={() => handleRemoveStop(idx)}>
-                        &times;
-                      </Button>
-                    </div>
-                  ))}
-                  <Button type="button" variant="outline" onClick={handleAddStop}>
+                    ))}
+                  </div>
+                  <Button type="button" variant="outline" onClick={handleAddStop} className="w-full sm:w-auto">
                     + Add Stop
                   </Button>
                 </div>
-                <div className="flex gap-4">
-                  <div className="space-y-2 flex-1">
+                <div className="flex flex-col md:flex-row gap-4">
+                  <div className="space-y-2 flex-1 min-w-0">
                     <Label htmlFor="date">Date</Label>
-                    <Popover><PopoverTrigger asChild><Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{date ? format(date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent></Popover>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}> <CalendarIcon className="mr-2 h-4 w-4" />{date ? format(date, "PPP") : <span>Pick a date</span>}</Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0">
+                        <Calendar mode="single" selected={date} onSelect={setDate} initialFocus />
+                      </PopoverContent>
+                    </Popover>
                   </div>
-                  <div className="space-y-2 w-24">
+                  <div className="space-y-2 w-full md:w-40">
                     <Label htmlFor="time">Time</Label>
-                    <div className="relative">
+                    <div className="relative w-full">
                       <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground">
                         <ClockIcon className="h-4 w-4" />
                       </span>
@@ -755,48 +750,42 @@ export function UserDashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center justify-between pt-1">
+                <div className="flex flex-col sm:flex-row items-center justify-between pt-1 gap-2">
                   <div className="flex items-center space-x-2">
-                  <Switch id="round-trip" checked={isRoundTrip} onCheckedChange={setIsRoundTrip} />
-                  <Label htmlFor="round-trip">Round Trip</Label>
+                    <Switch id="round-trip" checked={isRoundTrip} onCheckedChange={setIsRoundTrip} />
+                    <Label htmlFor="round-trip">Round Trip</Label>
                   </div>
-                  
                   {/* Simple Round Trip Return Time - Aligned to the right */}
                   {isRoundTrip && !shouldShowTransportSection && (
-                  <div className="flex items-center space-x-1 ml-2">
-                    <Label htmlFor="simple-return-time" className="text-sm whitespace-nowrap">Return:</Label>
-                    <Input
-                    id="simple-return-time"
-                    type="time"
-                    value={returnTime}
-                    onChange={e => setReturnTime(e.target.value)}
-                    required
-                    min={time}
-                    className="w-28"
-                    />
-                  </div>
+                    <div className="flex items-center space-x-1 ml-0 sm:ml-2 w-full sm:w-auto">
+                      <Label htmlFor="simple-return-time" className="text-sm whitespace-nowrap">Return:</Label>
+                      <Input
+                        id="simple-return-time"
+                        type="time"
+                        value={returnTime}
+                        onChange={e => setReturnTime(e.target.value)}
+                        required
+                        min={time}
+                        className="w-full sm:w-28"
+                      />
+                    </div>
                   )}
                 </div>
-                
                 {/* Simple Round Trip validation message */}
                 {isRoundTrip && !shouldShowTransportSection && (
                   <div className={`text-xs ${returnTimeError ? "text-red-500" : "text-muted-foreground"}`}>
                     Return time must be within 10 hours of your initial time.
                   </div>
                 )}
-                
                 {/* Enhanced Round Trip for Transport Locations */}
                 {isRoundTrip && shouldShowTransportSection && (
                   <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="return-date">Return Date</Label>
                         <Popover>
                           <PopoverTrigger asChild>
-                            <Button id="return-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !returnDate && "text-muted-foreground")}>
-                              <CalendarIcon className="mr-2 h-4 w-4" />
-                              {returnDate ? format(returnDate, "MMM d") : <span>Date</span>}
-                            </Button>
+                            <Button id="return-date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !returnDate && "text-muted-foreground")}> <CalendarIcon className="mr-2 h-4 w-4" />{returnDate ? format(returnDate, "MMM d") : <span>Date</span>}</Button>
                           </PopoverTrigger>
                           <PopoverContent className="w-auto p-0">
                             <Calendar mode="single" selected={returnDate} onSelect={setReturnDate} initialFocus />
@@ -1052,16 +1041,40 @@ export function UserDashboard() {
                 </div>
             </div>
              <div className="text-center text-xl font-bold text-foreground py-1 h-10 flex items-center justify-center gap-1">
-                <BadgeDollarSign /> Fare: {isCalculatingEditFare ? <Loader2 className="animate-spin" /> : editFare !== null ? `$${(editFare + editDayOfFee + rescheduleFee).toFixed(2)}` : "--"}
+                <BadgeDollarSign /> Fare: ${editFare?.toFixed(2)}
               </div>
+              {rescheduleFee > 0 && (
+                <div className="text-center text-sm text-orange-600 font-semibold">
+                  Reschedule Fee: ${rescheduleFee.toFixed(2)} (applied on save)
+                  <br />
+                  <span className="text-xs text-muted-foreground">New Total: ${(editFare! + rescheduleFee).toFixed(2)}</span>
+                </div>
+              )}
               {/* Always show fee breakdown for edit dialog */}
               <div className="text-xs text-muted-foreground text-center mb-2">
                 <div>Fare breakdown:</div>
                 <ul className="list-disc ml-4 text-left inline-block">
-                  <li>Base fare: ${editFare?.toFixed(2) ?? "--"}</li>
-                  {editDayOfFee > 0 && <li>Day-of-scheduling fee: ${editDayOfFee}</li>}
-                  {rescheduleFee > 0 && <li>Reschedule fee: ${rescheduleFee}</li>}
-                  <li className="font-semibold">Total: {editFare !== null ? (editFare + editDayOfFee + rescheduleFee).toFixed(2) : "--"}</li>
+                  {editingRide && editingRide.fees && (
+                    <>
+                      <li>Base fare: ${editingRide.fees.base?.toFixed(2) ?? "--"}</li>
+                      {editingRide.fees.reschedule && editingRide.fees.reschedule > 0 && (
+                        <li>Reschedule fee: ${editingRide.fees.reschedule.toFixed(2)}</li>
+                      )}
+                      {editingRide.fees.day_of && editingRide.fees.day_of > 0 && (
+                        <li>Day-of-scheduling fee: ${editingRide.fees.day_of.toFixed(2)}</li>
+                      )}
+                      {editingRide.fees.driver_addon && editingRide.fees.driver_addon > 0 && (
+                        <li>Driver add-on: ${editingRide.fees.driver_addon.toFixed(2)}</li>
+                      )}
+                      {/* Show any future/unknown fees */}
+                      {Object.entries(editingRide.fees).map(([key, value]) => (
+                        ["base", "reschedule", "day_of", "driver_addon"].includes(key) || !value || value <= 0 ? null : (
+                          <li key={key}>{key.replace(/_/g, ' ')}: ${value.toFixed(2)}</li>
+                        )
+                      ))}
+                      <li className="font-semibold">Total: {editingRide && editingRide.fees ? Object.values(editingRide.fees).reduce((sum: number, v) => sum + (typeof v === 'number' ? v : 0), 0).toFixed(2) : "--"}</li>
+                    </>
+                  )}
                 </ul>
               </div>
               {/* Error message for invalid date/time in edit dialog */}

@@ -113,7 +113,9 @@ export function RideCard({
 }: RideCardProps) {
   const { markAsPaid, currentUserProfile, addComment } = useRideStore();
   const [isEditingFare, setIsEditingFare] = useState(false);
-  const [newFare, setNewFare] = useState(ride.fare);
+  const [newFare, setNewFare] = useState(
+    ride.fees && typeof ride.fees.base === 'number' ? parseFloat(ride.fees.base.toFixed(2)) : 0
+  );
   const [fareError, setFareError] = useState<string>("");
   const [isUpdatingFare, setIsUpdatingFare] = useState(false);
   const [isPostingComment, setIsPostingComment] = useState(false);
@@ -144,7 +146,12 @@ export function RideCard({
     try {
       const venmoUsername = ride.driver?.venmoUsername || "Alex-Meisler";
       const note = `${ride.user?.name || "User"}: From ${ride.pickup || "?"} To ${ride.dropoff || "?"} On ${ride.dateTime ? format(new Date(ride.dateTime), "MMM d, yyyy") : "?"}`;
-      const venmoUrl = `https://venmo.com/u/${venmoUsername}?txn=pay&amount=${ride.fare.toFixed(2)}&note=${encodeURIComponent(note)}`;
+      // Use total fare from fees if available, else fallback to 0
+      let totalFare = 0;
+      if (ride.fees) {
+        totalFare = Object.values(ride.fees).reduce((sum: number, v) => sum + (typeof v === 'number' ? v : 0), 0);
+      }
+      const venmoUrl = `https://venmo.com/u/${venmoUsername}?txn=pay&amount=${totalFare.toFixed(2)}&note=${encodeURIComponent(note)}`;
       window.open(venmoUrl, "_blank");
       // Do NOT mark as paid here
     } catch (error) {
@@ -419,7 +426,15 @@ export function RideCard({
             {!isEditingFare ? (
               <>
                 <span className="text-muted-foreground ml-2">
-                  ${ride.fare.toFixed(2)}
+                  {ride.fees ? (
+                    (() => {
+                      // Always show total as sum of all fees, to two decimals
+                      const total = Object.values(ride.fees).reduce((sum: number, v) => sum + (typeof v === 'number' ? v : 0), 0);
+                      return `$${total.toFixed(2)}`;
+                    })()
+                  ) : (
+                    `$--`
+                  )}
                 </span>
                 {onUpdateFare && (
                   <Button
@@ -427,7 +442,7 @@ export function RideCard({
                     variant="ghost"
                     className="h-6 w-6"
                     onClick={() => {
-                      setNewFare(ride.fare);
+                      setNewFare(ride.fees && typeof ride.fees.base === 'number' ? parseFloat(ride.fees.base.toFixed(2)) : 0);
                       setIsEditingFare(true);
                     }}
                   >
@@ -442,7 +457,7 @@ export function RideCard({
                 <Input
                   type="number"
                   value={newFare}
-                  onChange={(e) => setNewFare(parseFloat(e.target.value) || 0)}
+                  onChange={(e) => setNewFare(parseFloat(parseFloat(e.target.value).toFixed(2)) || 0)}
                   className="h-8 w-24"
                   step="0.01"
                   min="0"
@@ -470,12 +485,27 @@ export function RideCard({
           </div>
         </div>
         {/* Fee breakdown fine print */}
-        {showFeeBreakdown && (dayOfFee || rescheduleFee) && (
+        {ride.fees && (
           <div className="text-xs text-muted-foreground mt-1 ml-8">
             <div>Fare breakdown:</div>
             <ul className="list-disc ml-4">
-              {dayOfFee ? <li>Day-of-scheduling fee: ${dayOfFee}</li> : null}
-              {rescheduleFee ? <li>Reschedule fee: ${rescheduleFee}</li> : null}
+              <li>Base fare: ${ride.fees.base?.toFixed(2) ?? "--"}</li>
+              {ride.fees.reschedule && ride.fees.reschedule > 0 && (
+                <li>Reschedule fee: ${ride.fees.reschedule.toFixed(2)}</li>
+              )}
+              {ride.fees.day_of && ride.fees.day_of > 0 && (
+                <li>Day-of-scheduling fee: ${ride.fees.day_of.toFixed(2)}</li>
+              )}
+              {ride.fees.driver_addon && ride.fees.driver_addon > 0 && (
+                <li>Driver add-on: ${ride.fees.driver_addon.toFixed(2)}</li>
+              )}
+              {/* Show any future/unknown fees */}
+              {Object.entries(ride.fees).map(([key, value]) => (
+                ["base", "reschedule", "day_of", "driver_addon"].includes(key) || !value || value <= 0 ? null : (
+                  <li key={key}>{key.replace(/_/g, ' ')}: ${value.toFixed(2)}</li>
+                )
+              ))}
+              <li className="font-semibold">Total: {Object.values(ride.fees).reduce((sum: number, v) => sum + (typeof v === 'number' ? v : 0), 0).toFixed(2)}</li>
             </ul>
           </div>
         )}

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isAirportRide, isLocalRide, calculateRescheduleFee } from "../../../../src/lib/fees";
+import { isAirportRide, isLocalRide, calculateRescheduleFee } from "@/lib/fees";
 
 export async function POST(req: Request) {
   const { pickupLocation, dropoffLocation, oldTime, newTime, mileageMeters } = await req.json();

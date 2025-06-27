@@ -62,7 +62,7 @@ interface RideState {
   addRide: (
     pickup: string,
     dropoff: string,
-    fare: number,
+    fare: number, // legacy param, ignore in new model
     details: {
       dateTime: string;
       transportType?: TransportType | "";
@@ -79,7 +79,7 @@ interface RideState {
     rideId: string,
     pickup: string,
     dropoff: string,
-    fare: number,
+    fare: number, // legacy param, ignore in new model
     details: {
       dateTime: string;
       transportType?: TransportType | "";
@@ -103,6 +103,12 @@ interface RideState {
     user: Pick<User, "id" | "name" | "avatarUrl">
   ) => Promise<void>;
   cleanupOldDeniedRides: () => Promise<void>;
+  rescheduleRide: (
+    rideId: string,
+    newDateTime: string,
+    rescheduleFee: number,
+    newFare: number
+  ) => Promise<void>; // <-- Added rescheduleRide
 }
 
 export const useRideStore = create<RideState>((set, get) => ({
@@ -339,7 +345,7 @@ export const useRideStore = create<RideState>((set, get) => ({
   addRide: async (
     pickup,
     dropoff,
-    fare,
+    fare, // legacy param, ignore in new model
     details,
     stops // <-- add stops param
   ) => {
@@ -380,11 +386,19 @@ export const useRideStore = create<RideState>((set, get) => ({
 
       const { transportType, linkedTripId, tripLabel, ...otherDetails } = details;
 
+      // --- FEES OBJECT ---
+      // Always include base fee, and optionally add other fees (e.g., day_of, reschedule, etc.)
+      // For now, only base is required; others can be added by backend or UI as needed
+      const fees: { base: number; [key: string]: number } = {
+        base: Number(fare.toFixed(2)),
+      };
+      // Optionally add more fees here if needed (e.g., day_of, reschedule, etc.)
+
       const newRide: Omit<Ride, "id" | "user"> & { user: Partial<User> } = {
         user: userPayload,
         pickup,
         dropoff,
-        fare,
+        fees,
         status: "pending",
         createdAt: serverTimestamp(),
         ...otherDetails,
@@ -440,10 +454,16 @@ export const useRideStore = create<RideState>((set, get) => ({
 
       const rideRef = doc(db, "rides", rideId);
       // Accept returnTime as an extra property if present
+      // --- FEES OBJECT ---
+      const fees: { base: number; [key: string]: number } = {
+        base: Number(fare.toFixed(2)),
+      };
+      // Optionally add more fees here if needed (e.g., day_of, reschedule, etc.)
+
       const updateData: any = {
         pickup,
         dropoff,
-        fare,
+        fees,
         ...details,
         duration: durationMinutes || 60,
         status: "pending",
@@ -471,6 +491,23 @@ export const useRideStore = create<RideState>((set, get) => ({
       console.error("Error updating ride:", error);
       throw error;
     }
+  },
+  /**
+   * Reschedule a ride and apply a reschedule fee (calls Cloud Function)
+   * @param rideId string
+   * @param newDateTime string (ISO)
+   * @param rescheduleFee number
+   * @param newFare number (fare + fee)
+   */
+  rescheduleRide: async (
+    rideId: string,
+    newDateTime: string,
+    rescheduleFee: number,
+    newFare: number
+  ) => {
+    const functionsInstance = getFunctions();
+    const rescheduleRideFn = httpsCallable(functionsInstance, "rescheduleRide");
+    await rescheduleRideFn({ rideId, newDateTime, rescheduleFee, newFare });
   },
   acceptRide: async (id: string) => {
     const functionsInstance = getFunctions();
