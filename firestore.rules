@@ -1,7 +1,88 @@
+rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    // Rules for the 'users' collection
+    match /users/{userId} {
+      // Any authenticated user can read any user's profile.
+      // This is needed to display user/driver names and avatars on rides.
+      allow read: if request.auth != null;
+
+      // A user can only create their own user document.
+      allow create: if request.auth.uid == userId;
+
+      // A user can only update their own profile.
+      // We are trusting the Cloud Function 'updateUserProfile' for granular control.
+      allow update: if request.auth.uid == userId;
+
+      // No one can delete a user profile directly from the client.
+      // This should be handled by a dedicated Cloud Function if needed.
+      allow delete: if false;
+    }
+
+    // Rules for the 'rides' collection
+    match /rides/{rideId} {
+      // Any authenticated user can create a ride request,
+      // as long as they are setting themselves as the user.
+      allow create: if request.auth.uid == request.resource.data.user.id;
+
+      // Allow listing rides if authenticated, even if collection is empty
+      allow list: if request.auth != null;
+
+      // This is the most important rule. It mirrors the logic from the
+      // client-side queries we wrote. A user can read a ride if:
+      // 1. They are the user who requested the ride.
+      // 2. Or, they are a driver AND the ride is pending.
+      // 3. Or, they are the driver assigned to the ride.
+      allow read: if resource.data != null && (
+                    request.auth.uid == resource.data.user.id ||
+                    (
+                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver' &&
+                      (resource.data.status == 'pending' || request.auth.uid == resource.data.driver.id)
+                    )
+                  );
+
+      // Allow updates for specific actions:
+      // - Any driver can mark a ride as paid or complete
+      // - Both drivers and users can cancel or edit rides
+      allow update: if resource.data != null && (
+        // Drivers can mark as paid or complete
+        (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver' &&
+          (
+            (request.resource.data.status == 'paid' && resource.data.status != 'paid') ||
+            (request.resource.data.status == 'complete' && resource.data.status != 'complete')
+          )
+        ) ||
+        // Drivers and users can cancel
+        (
+          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver' ||
+           request.auth.uid == resource.data.user.id) &&
+          (request.resource.data.status == 'cancelled' && resource.data.status != 'cancelled')
+        ) ||
+        // Drivers and users can edit rides (with fare restriction for users)
+        (
+          (
+            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver'
+          ) || (
+            request.auth.uid == resource.data.user.id &&
+            (
+              // Only allow fare to be changed if user is not changing it
+              (!('fare' in request.resource.data) || request.resource.data.fare == resource.data.fare)
+            )
+          )
+        )
+      );
+
+      // No one can delete a ride directly from the client.
+      // This should be handled by a dedicated Cloud Function if needed.
+      allow delete: if false;
+    }
+    // By default, no one can read or write anything.
+    // We will open up specific paths below.
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
   }
 }

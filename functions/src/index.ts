@@ -1,5 +1,6 @@
 import {onCall, HttpsError} from "firebase-functions/v2/https";
 import * as admin from "firebase-admin";
+import {createHash} from "crypto";
 
 admin.initializeApp();
 const db = admin.firestore();
@@ -12,6 +13,11 @@ const isDriver = async (uid: string): Promise<admin.firestore.DocumentData> => {
     throw new HttpsError("permission-denied", "User is not a driver.");
   }
   return user;
+};
+
+// Helper to hash a string with SHA-256
+const hashSHA256 = (input: string): string => {
+  return createHash("sha256").update(input).digest("hex");
 };
 
 // Accept Ride
@@ -31,7 +37,7 @@ export const acceptRide = onCall(async (request) => {
       name: driver.name,
       avatarUrl: driver.avatarUrl,
       role: driver.role,
-      venmoUsername: driver.venmoUsername,
+      venmoUsername: driver.venmoUsername || "Alex-Meisler",
       phoneNumber: driver.phoneNumber,
     },
     isRevised: false,
@@ -99,8 +105,32 @@ export const cancelRideByDriver = onCall(async (request) => {
   const uid = request.auth.uid;
   await isDriver(uid);
   const rideId = request.data.rideId;
+  const rideRef = db.doc(`rides/${rideId}`);
+  const rideDoc = await rideRef.get();
 
-  await db.doc(`rides/${rideId}`).update({status: "pending", driver: null});
+  if (!rideDoc.exists) {
+    throw new HttpsError("not-found", "Ride not found.");
+  }
+
+  const ride = rideDoc.data();
+  if (!ride || !ride.driver || !ride.driver.id) {
+    throw new HttpsError(
+        "failed-precondition",
+        "No driver assigned to this ride.",
+    );
+  }
+
+  // Compare SHA-256 hashes
+  const rideDriverHash = hashSHA256(ride.driver.id);
+  const currentDriverHash = hashSHA256(uid);
+  if (rideDriverHash !== currentDriverHash) {
+    throw new HttpsError(
+        "permission-denied",
+        "You are not the assigned driver for this ride.",
+    );
+  }
+
+  await rideRef.update({status: "pending", driver: null});
   return {success: true};
 });
 
@@ -160,27 +190,37 @@ export const updateRideFare = onCall(async (request) => {
 
 // Mark as Paid
 export const markAsPaid = onCall(async (request) => {
+  console.log('[markAsPaid] request.auth:', request.auth);
+  console.log('[markAsPaid] request.data:', request.data);
   if (!request.auth) {
+    console.error('[markAsPaid] Not signed in.');
     throw new HttpsError("unauthenticated", "Not signed in.");
   }
 
   const uid = request.auth.uid;
-  // Only require that the user is a driver
-  await isDriver(uid);
+  const driver = await isDriver(uid);
+  console.log('[markAsPaid] driver:', driver);
   const rideId = request.data.rideId;
   const rideRef = db.doc(`rides/${rideId}`);
   const rideDoc = await rideRef.get();
 
   if (!rideDoc.exists) {
+    console.error('[markAsPaid] Ride not found:', rideId);
     throw new HttpsError("not-found", "Ride not found.");
   }
 
-  const ride = rideDoc.data();
-  if (!ride) {
-    throw new HttpsError("not-found", "Ride not found.");
+  const ride = rideDoc.data()!;
+  console.log('[markAsPaid] ride:', ride);
+  if (ride.driver?.id !== driver.id) {
+    console.error('[markAsPaid] Permission denied. ride.driver.id:', ride.driver?.id, 'driver.id:', driver.id);
+    throw new HttpsError(
+        "permission-denied",
+        "Only the driver can mark a ride as paid.",
+    );
   }
 
   await rideRef.update({isPaid: true});
+  console.log('[markAsPaid] Ride marked as paid:', rideId);
   return {success: true};
 });
 
@@ -220,5 +260,46 @@ export const addComment = onCall(async (request) => {
   await rideRef.update({
     comments: admin.firestore.FieldValue.arrayUnion(comment),
   });
+  return {success: true};
+});
+
+// General Edit Ride (drivers can edit any field, users can edit any field except fare)
+export const editRide = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Not signed in.");
+  }
+
+  const uid = request.auth.uid;
+  const {rideId, updates} = request.data;
+  if (!rideId || typeof updates !== "object" || Array.isArray(updates)) {
+    throw new HttpsError("invalid-argument", "Invalid rideId or updates.");
+  }
+
+  const userDoc = await db.doc(`users/${uid}`).get();
+  if (!userDoc.exists) {
+    throw new HttpsError("not-found", "User not found");
+  }
+  const user = userDoc.data()!;
+
+  const rideRef = db.doc(`rides/${rideId}`);
+  const rideDoc = await rideRef.get();
+  if (!rideDoc.exists) {
+    throw new HttpsError("not-found", "Ride not found.");
+  }
+  const ride = rideDoc.data()!;
+
+  // Only drivers or the user who requested the ride can edit
+  const isDriver = user.role === "driver";
+  const isUser = ride.user?.id === uid;
+  if (!isDriver && !isUser) {
+    throw new HttpsError("permission-denied", "Not allowed to edit this ride.");
+  }
+
+  // If not a driver, block fare changes
+  if (!isDriver && "fare" in updates && updates.fare !== ride.fare) {
+    throw new HttpsError("permission-denied", "Only drivers can change the fare.");
+  }
+
+  await rideRef.update(updates);
   return {success: true};
 });

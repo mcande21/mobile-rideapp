@@ -18,12 +18,21 @@ import {
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { Separator } from "./ui/separator";
+import { Input } from "./ui/input";
 
 export function DriverDashboard() {
-  const { rides, acceptRide, rejectRide, updateRideFare, cancelRideByDriver, completeRide, cleanupOldDeniedRides } =
+  const { rides, acceptRide, rejectRide, updateRideFare, cancelRideByDriver, completeRide, cleanupOldDeniedRides, currentUserProfile, updateUserProfile } =
     useRideStore();
   const { toast } = useToast();
-  
+
+  // Debug: Log currentUserProfile and role
+  useEffect(() => {
+    console.log("[DriverDashboard] currentUserProfile:", currentUserProfile);
+    if (currentUserProfile) {
+      console.log("[DriverDashboard] role:", currentUserProfile.role);
+    }
+  }, [currentUserProfile]);
+
   const [isClient, setIsClient] = useState(false);
   useEffect(() => {
     setIsClient(true);
@@ -34,7 +43,21 @@ export function DriverDashboard() {
   // Track loading state for each ride action to prevent duplicate submissions
   const [loadingRideId, setLoadingRideId] = useState<string | null>(null);
 
+  // Venmo username modal state
+  const [showVenmoModal, setShowVenmoModal] = useState(false);
+  const [pendingAcceptId, setPendingAcceptId] = useState<string | null>(null);
+  const [venmoInput, setVenmoInput] = useState("");
+  const [venmoError, setVenmoError] = useState("");
+  const [savingVenmo, setSavingVenmo] = useState(false);
+
   const handleAcceptRide = async (id: string) => {
+    if (!currentUserProfile?.venmoUsername) {
+      setPendingAcceptId(id);
+      setShowVenmoModal(true);
+      setVenmoInput("");
+      setVenmoError("");
+      return;
+    }
     setLoadingRideId(id);
     try {
       await acceptRide(id);
@@ -50,6 +73,40 @@ export function DriverDashboard() {
       });
     } finally {
       setLoadingRideId(null);
+    }
+  };
+
+  // Save Venmo username and proceed to accept ride
+  const handleSaveVenmoAndAccept = async () => {
+    setVenmoError("");
+    if (!venmoInput.trim()) {
+      setVenmoError("Please enter your Venmo username.");
+      return;
+    }
+    setSavingVenmo(true);
+    try {
+      // Ensure all required fields are present and not undefined
+      await updateUserProfile({
+        name: currentUserProfile?.name || "",
+        phoneNumber: currentUserProfile?.phoneNumber || "",
+        homeAddress: currentUserProfile?.homeAddress ?? "",
+        venmoUsername: venmoInput.trim(),
+        customAvatar: currentUserProfile?.customAvatar,
+      });
+      setShowVenmoModal(false);
+      setSavingVenmo(false);
+      if (pendingAcceptId) {
+        setLoadingRideId(pendingAcceptId);
+        await acceptRide(pendingAcceptId);
+        toast({
+          title: "Ride Accepted!",
+          description: "The ride has been added to your schedule.",
+        });
+        setPendingAcceptId(null);
+      }
+    } catch (error) {
+      setVenmoError("Failed to save Venmo username. Please try again.");
+      setSavingVenmo(false);
     }
   };
 
@@ -172,6 +229,28 @@ export function DriverDashboard() {
 
   return (
     <div className="container mx-auto p-4 md:p-6 space-y-8">
+      {/* Venmo Username Modal */}
+      {showVenmoModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-40">
+          <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg p-6 w-full max-w-sm">
+            <h3 className="text-lg font-bold mb-2">Enter Your Venmo Username</h3>
+            <p className="text-sm text-muted-foreground mb-4">You must provide a Venmo username before accepting rides. This will be visible to riders for payment.</p>
+            <Input
+              placeholder="Venmo username (without @)"
+              value={venmoInput}
+              onChange={e => setVenmoInput(e.target.value)}
+              disabled={savingVenmo}
+              className="mb-2"
+            />
+            {venmoError && <div className="text-xs text-red-500 mb-2">{venmoError}</div>}
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowVenmoModal(false)} disabled={savingVenmo}>Cancel</Button>
+              <Button onClick={handleSaveVenmoAndAccept} disabled={savingVenmo} className="bg-green-500 text-white">{savingVenmo ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save & Accept"}</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
         <h2 className="text-3xl font-bold mb-4">New Ride Requests</h2>
         {newRequests.length > 0 ? (

@@ -1,6 +1,9 @@
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
 import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
+import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
+// Import storage emulator connection if needed in the future
+// import { getStorage, connectStorageEmulator } from "firebase/storage";
 
 const firebaseConfig: FirebaseOptions = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -22,5 +25,15 @@ const isConfigured = !!(
 const app = isConfigured && !getApps().length ? initializeApp(firebaseConfig) : (isConfigured ? getApp() : undefined);
 const auth = app ? getAuth(app) : undefined;
 const db = app ? getFirestore(app) : undefined;
+const functions = app ? getFunctions(app) : undefined;
+// const storage = app ? getStorage(app) : undefined;
 
-export { app, auth, db, isConfigured };
+// Connect to emulators if running locally
+if (typeof window !== "undefined" && window.location.hostname === "localhost") {
+  if (db) connectFirestoreEmulator(db, "localhost", 8080); // Firestore emulator
+  if (functions) connectFunctionsEmulator(functions, "localhost", 5001); // Functions emulator
+  // if (storage) connectStorageEmulator(storage, "localhost", 9199); // Storage emulator (uncomment if needed)
+  // Hosting emulator runs on port 5000 (no client SDK connection needed)
+}
+
+export { app, auth, db, functions, isConfigured };

@@ -58,6 +58,7 @@ import {
   BadgeDollarSign,
   Edit,
   Save,
+  Clock as ClockIcon,
 } from "lucide-react";
 import type { Direction, TransportType, Ride } from "@/lib/types";
 import { useForm, Controller } from "react-hook-form";
@@ -700,7 +701,7 @@ export function UserDashboard() {
     <>
       <div className="container mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-1">
-          <Card className="max-w-lg mx-auto lg:mx-0">
+          <Card className="max-w-xl mx-auto lg:mx-0">
             <CardHeader className="pb-4">
               <CardTitle className="text-xl">Request a Ride</CardTitle>
               <CardDescription className="text-sm">Enter your pickup and drop-off locations.</CardDescription>
@@ -737,7 +738,22 @@ export function UserDashboard() {
                     <Label htmlFor="date">Date</Label>
                     <Popover><PopoverTrigger asChild><Button id="date" variant={"outline"} className={cn("w-full justify-start text-left font-normal", !date && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{date ? format(date, "PPP") : <span>Pick a date</span>}</Button></PopoverTrigger><PopoverContent className="w-auto p-0"><Calendar mode="single" selected={date} onSelect={setDate} initialFocus /></PopoverContent></Popover>
                   </div>
-                  <div className="space-y-2 w-32"><Label htmlFor="time">Time</Label><Input id="time" type="time" value={time} onChange={(e) => setTime(e.target.value)} required className="w-full" /></div>
+                  <div className="space-y-2 w-24">
+                    <Label htmlFor="time">Time</Label>
+                    <div className="relative">
+                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground">
+                        <ClockIcon className="h-4 w-4" />
+                      </span>
+                      <Input
+                        id="time"
+                        type="time"
+                        value={time}
+                        onChange={(e) => setTime(e.target.value)}
+                        required
+                        className="w-full pl-8"
+                      />
+                    </div>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between pt-1">
                   <div className="flex items-center space-x-2">
@@ -1005,7 +1021,7 @@ export function UserDashboard() {
                   <Input
                     id="edit-return-time"
                     type="time"
-                    className="ml-2 w-32"
+                    className="ml-2 w-24"
                     value={editReturnTime}
                     onChange={e => setEditReturnTime(e.target.value)}
                     required

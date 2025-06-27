@@ -117,8 +117,14 @@ export const useRideStore = create<RideState>((set, get) => ({
       return () => {};
     }
 
+    let unsubRides: (() => void) | undefined = undefined;
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       set({ currentUser: user });
+      // Unsubscribe from previous rides listener if it exists
+      if (unsubRides) {
+        unsubRides();
+        unsubRides = undefined;
+      }
       if (user) {
         // Try to get user document with retry mechanism for new users
         let userDoc;
@@ -143,8 +149,6 @@ export const useRideStore = create<RideState>((set, get) => ({
           set({ currentUserProfile: profile });
 
           const ridesCollection = collection(db!, "rides");
-          let unsubRides = () => {}; // Initialize an empty unsubscribe function
-
           // --- START REPLACEMENT LOGIC ---
           if (profile.role === 'driver') {
               // --- DRIVER ---
@@ -188,7 +192,7 @@ export const useRideStore = create<RideState>((set, get) => ({
 
         const ridesCollection = collection(db!, "rides");
         const q = query(ridesCollection, orderBy("createdAt", "desc"));
-        const unsubRides = onSnapshot(q, (snapshot) => {
+        unsubRides = onSnapshot(q, (snapshot) => {
           const rides = snapshot.docs.map(
             (doc) => ({ id: doc.id, ...doc.data() } as Ride)
           );
@@ -203,6 +207,10 @@ export const useRideStore = create<RideState>((set, get) => ({
           rides: [],
           loading: false,
         });
+        // Unsubscribe from rides listener if it exists
+        if (unsubRides) {
+          unsubRides = undefined;
+        }
       }
     });
     return unsubscribe;
