@@ -244,34 +244,35 @@ export const useRideStore = create<RideState>((set, get) => ({
     });
   },
   signInWithGoogle: async () => {
-    if (!auth || !db) throw new Error("Firebase not configured");
-    const provider = new GoogleAuthProvider();
+    set({ loading: true, error: null });
+    if (!auth || !db) {
+      const err = new Error("Firebase not initialized.");
+      set({ error: err.message, loading: false });
+      throw err;
+    }
     try {
+      const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       const user = result.user;
 
+      // Check if this is a new user or an existing user
       const userDocRef = doc(db, "users", user.uid);
       const userDoc = await getDoc(userDocRef);
 
       if (!userDoc.exists()) {
-        // Create new user profile without phoneNumber so they're redirected to complete-profile
-        const newUserData = {
+        // This is a new user, create their profile in Firestore
+        await setDoc(userDocRef, {
           name: user.displayName || "New User",
-          role: "user" as UserRole,
-          avatarUrl: user.photoURL || `https://placehold.co/100x100.png`,
-          customAvatar: { type: "preset", value: "car-svgrepo-com" },
-          // Deliberately omitting phoneNumber so the complete-profile flow triggers
-        };
-        
-        await setDoc(userDocRef, newUserData);
-        
-        // Immediately set the user profile in the store to avoid race condition
-        set({
-          currentUserProfile: { id: user.uid, ...newUserData } as User,
+          email: user.email, // <-- The critical fix: add the email
+          role: "user",
+          createdAt: serverTimestamp(),
         });
       }
-    } catch (error) {
-      console.error("Error during Google sign-in:", error);
+      // For existing users, their profile is already in place.
+      // The onAuthStateChanged listener will handle setting the user profile state.
+    } catch (error: any) {
+      console.error("Google Sign-In Error:", error);
+      set({ error: error.message, loading: false });
       throw error;
     }
   },

@@ -3,85 +3,131 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    // Helper function to check if a user is authenticated.
+    function isAuth() {
+      return request.auth != null;
+    }
+
+    // Helper function to get the requesting user's data from the 'users' collection.
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Helper function to check if the requesting user has the 'driver' role.
+    function isDriver() {
+      return isAuth() && getUserData().role == 'driver';
+    }
+
     // Rules for the 'users' collection
     match /users/{userId} {
-      // Any authenticated user can read any user's profile.
-      // This is needed to display user/driver names and avatars on rides.
-      allow read: if request.auth != null;
+      // A user can read their own profile. For privacy, other profiles are not readable directly.
+      // Your app should use a Cloud Function to expose public data (like name/avatar) when needed.
+      allow read: if isAuth() && request.auth.uid == userId;
 
-      // TEMP: Allow any create/update for backend testing
-      allow create, update: if true;
+      // A user can only create or update their own profile.
+      // We add validation to ensure data integrity.
+      allow create, update: if isAuth() && request.auth.uid == userId &&
+                              // Ensure required fields exist and have the correct type.
+                              request.resource.data.email is string &&
+                              request.resource.data.name is string &&
+                              // Enforce that 'role' can only be 'user' or 'driver'.
+                              request.resource.data.role in ['user', 'driver'];
 
-      // No one can delete a user profile directly from the client.
-      // This should be handled by a dedicated Cloud Function if needed.
+      // Deleting users from the client is disabled.
       allow delete: if false;
     }
 
     // Rules for the 'rides' collection
     match /rides/{rideId} {
-      // Any authenticated user can create a ride request,
-      // as long as they are setting themselves as the user.
-      allow create: if request.auth.uid == request.resource.data.user.id;
+      // --- Helper Functions for Ride Context ---
+      function existingData() { return resource.data; }
+      function incomingData() { return request.resource.data; }
+      function isRideOwner() { return isAuth() && request.auth.uid == existingData().user.id; }
+      function isAssignedDriver() {
+        return isDriver() && 'driver' in existingData() && existingData().driver != null && request.auth.uid == existingData().driver.id;
+      }
 
-      // Allow listing rides if authenticated, even if collection is empty
-      allow list: if request.auth != null;
+      // --- Read and List Rules ---
 
-      // This is the most important rule. It mirrors the logic from the
-      // client-side queries we wrote. A user can read a ride if:
-      // 1. They are the user who requested the ride.
-      // 2. Or, they are a driver AND the ride is pending.
-      // 3. Or, they are the driver assigned to the ride.
-      allow read: if resource.data != null && (
-                    request.auth.uid == resource.data.user.id ||
-                    (
-                      get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver' &&
-                      (resource.data.status == 'pending' || request.auth.uid == resource.data.driver.id)
-                    )
+      // A user can read a ride if they are the owner.
+      // A driver can read any 'pending' ride or any ride they are assigned to.
+      allow read: if isAuth() && (
+                    isRideOwner() ||
+                    (isDriver() && (existingData().status == 'pending' || isAssignedDriver()))
                   );
 
-      // Allow updates for specific actions:
-      // - Any driver can mark a ride as paid or complete
-      // - Both drivers and users can cancel or edit rides
-      allow update: if resource.data != null && (
-        // Drivers can mark as paid or complete
+      // 'list' allows queries. The 'read' rule above will still be enforced on every
+      // document returned by the query, ensuring users only see what they are allowed to.
+      // For performance, client-side queries should be specific (e.g., filter by user.id or status).
+      allow list: if isAuth();
+
+      // --- Write Rules (Create, Update, Delete) ---
+
+      // Any authenticated user can create a ride request for themselves.
+      // We add strong validation for the initial ride data.
+      allow create: if isAuth() &&
+                      // The creator must be the user assigned to the ride.
+                      request.auth.uid == incomingData().user.id &&
+                      // Validate the initial state and data types.
+                      incomingData().status == 'pending' &&
+                      incomingData().pickup is string && incomingData().pickup.size() > 0 &&
+                      incomingData().dropoff is string && incomingData().dropoff.size() > 0 &&
+                      incomingData().dateTime is string &&
+                      incomingData().fees is map &&
+                      'base' in incomingData().fees && incomingData().fees.base >= 0 &&
+                      // A user cannot assign a driver or add other fees on creation.
+                      !('driver' in incomingData()) &&
+                      incomingData().keys().hasOnly(['user', 'status', 'pickup', 'dropoff', 'dateTime', 'fees', 'isRoundTrip', 'returnTime', 'transportType', 'transportNumber', 'stops', 'tripLabel']);
+
+
+      // Updates are complex. We only allow specific, valid state transitions.
+      allow update: if isAuth() && (
+        // Case 1: A driver accepts a pending ride.
         (
-          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver' &&
-          (
-            (request.resource.data.status == 'paid' && resource.data.status != 'paid') ||
-            (request.resource.data.status == 'complete' && resource.data.status != 'complete')
-          )
+          isDriver() &&
+          existingData().status == 'pending' &&
+          incomingData().status == 'accepted' &&
+          incomingData().driver.id == request.auth.uid
         ) ||
-        // Drivers and users can cancel
+
+        // Case 2: The ride owner updates their own ride (e.g., reschedules).
         (
-          (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver' ||
-           request.auth.uid == resource.data.user.id) &&
-          (
-            // Allow cancelling pending rides without restriction
-            (resource.data.status == 'pending' && request.resource.data.status == 'cancelled') ||
-            // Otherwise, enforce cancellation policy (e.g., for accepted rides)
-            (resource.data.status != 'pending' && request.resource.data.status == 'cancelled' && resource.data.status != 'cancelled')
-          )
+          isRideOwner() &&
+          existingData().status in ['pending', 'accepted'] &&
+          // A user can NEVER change the fees, status, or driver.
+          incomingData().fees == existingData().fees &&
+          incomingData().status == existingData().status &&
+          incomingData().driver == existingData().driver
         ) ||
-        // Drivers and users can edit rides (with fare restriction for users)
+
+        // Case 3: The assigned driver updates the ride (e.g., adds a fee).
         (
-          (
-            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'driver'
-          ) || (
-            request.auth.uid == resource.data.user.id &&
-            (
-              // Only allow fare to be changed if user is not changing it
-              (!('fare' in request.resource.data) || request.resource.data.fare == resource.data.fare)
-            )
-          )
+          isAssignedDriver() &&
+          existingData().status == 'accepted' &&
+          // A driver cannot change the user who requested the ride.
+          incomingData().user.id == existingData().user.id
+        ) ||
+
+        // Case 4: The ride owner or assigned driver cancels the ride.
+        (
+          (isRideOwner() || isAssignedDriver()) &&
+          incomingData().status == 'cancelled' &&
+          existingData().status != 'cancelled' // Prevent re-cancelling.
+        ) ||
+
+        // Case 5: The assigned driver completes the ride.
+        (
+          isAssignedDriver() &&
+          incomingData().status == 'completed' &&
+          existingData().status == 'accepted'
         )
       );
 
-      // No one can delete a ride directly from the client.
-      // This should be handled by a dedicated Cloud Function if needed.
+      // Deleting rides from the client is disabled.
       allow delete: if false;
     }
-    // By default, no one can read or write anything.
-    // We will open up specific paths below.
+
+    // By default, deny all access to any other collections.
     match /{document=**} {
       allow read, write: if false;
     }

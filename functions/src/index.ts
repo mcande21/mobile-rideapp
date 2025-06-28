@@ -1,12 +1,10 @@
 import {onCall, HttpsError} from "firebase-functions/v2/https";
-import * as admin from "firebase-admin";
+import {FieldValue} from "firebase-admin/firestore";
 import {createHash} from "crypto";
-
-admin.initializeApp();
-const db = admin.firestore();
+import { db } from "../../src/lib/firebase-admin"; // Correctly import from the shared module
 
 // Helper to check for driver role
-const isDriver = async (uid: string): Promise<admin.firestore.DocumentData> => {
+const isDriver = async (uid: string) => {
   const userDoc = await db.doc(`users/${uid}`).get();
   const user = userDoc.data();
   if (!user || user.role !== "driver") {
@@ -89,7 +87,7 @@ export const cancelRide = onCall(async (request) => {
 
   await rideRef.update({
     status: "cancelled",
-    cancelledAt: admin.firestore.FieldValue.serverTimestamp(),
+    cancelledAt: FieldValue.serverTimestamp(),
     cancellationFeeApplied: isLateCancellation,
   });
 
@@ -275,7 +273,7 @@ export const addComment = onCall(async (request) => {
   };
 
   await rideRef.update({
-    comments: admin.firestore.FieldValue.arrayUnion(comment),
+    comments: FieldValue.arrayUnion(comment),
   });
   return {success: true};
 });

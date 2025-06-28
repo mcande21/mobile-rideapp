@@ -53,4 +53,10 @@ client_secret_*.json
 
 # Misc
 *.tsbuildinfo
-next-env.d.ts
+next-env.d.ts*.json
+*.keystore
+
+# Ignore sensitive files
+client_secret_*.json
+*.keystore
+*-firebase-adminsdk-*.json

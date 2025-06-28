@@ -292,52 +292,50 @@ export function UserDashboard() {
       if (pickup && dropoff && date && time) {
         setIsCalculatingFare(true);
         try {
-          const [hours, minutes] = time.split(":").map(Number);
-          const combinedDateTime = new Date(date);
-          combinedDateTime.setHours(hours, minutes, 0, 0);
-
-          // Check if this is a transport location round trip
-          const isTransportTrip = isTransportLocation(pickup) || isTransportLocation(dropoff);
-          
-          if (isRoundTrip && isTransportTrip && returnDate && returnTime) {
-            // For transport round trips, calculate as two separate one-way trips
-            const [returnHours, returnMinutes] = returnTime.split(":").map(Number);
-            const returnDateTime = new Date(returnDate);
-            returnDateTime.setHours(returnHours, returnMinutes, 0, 0);
-            
-            const breakdown = await calculateTransportRoundTripFare(
+          const response = await fetch('/api/fare', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              // Add authorization token if you have one
+            },
+            body: JSON.stringify({
               pickup,
               dropoff,
-              combinedDateTime,
-              returnDateTime,
-              stops // Pass stops/intermediates
-            );
-            
-            setFare(breakdown.total);
-            setFareBreakdown({ outbound: breakdown.outbound, return: breakdown.return });
-          } else {
-            // Regular trip calculation
-            const calculatedFare = await calculateTripFare(
-              pickup,
-              dropoff,
-              combinedDateTime,
+              date: date.toISOString(),
+              time,
               isRoundTrip,
-              stops // Pass stops/intermediates
-            );
-            setFare(calculatedFare);
+              returnDate: returnDate?.toISOString(),
+              returnTime,
+              stops,
+            }),
+          });
+
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to calculate fare");
+          }
+
+          const result = await response.json();
+
+          if (result.outbound !== undefined) {
+            setFare(result.total);
+            setFareBreakdown({ outbound: result.outbound, return: result.return });
+          } else {
+            setFare(result.total);
             setFareBreakdown(null);
           }
+
         } catch (error: any) {
           if (
             error &&
             typeof error.message === "string" &&
-            error.message.includes("No routes found")
+            error.message.includes("No route")
           ) {
             setDirectionsError(
               "No route could be found for the selected date and time. Please check your input"
             );
           } else {
-            setDirectionsError("Failed to calculate fare. Please try again.");
+            setDirectionsError(error.message || "Failed to calculate fare. Please try again.");
           }
           setFare(null);
           setFareBreakdown(null);
@@ -362,18 +360,30 @@ export function UserDashboard() {
       if (editPickup && editDropoff && editDate && editTime) {
         setIsCalculatingEditFare(true);
         try {
-          const [hours, minutes] = editTime.split(":").map(Number);
-          const combinedDateTime = new Date(editDate);
-          combinedDateTime.setHours(hours, minutes, 0, 0);
+          const response = await fetch('/api/fare', {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+               // Add authorization token if you have one
+            },
+            body: JSON.stringify({
+              pickup: editPickup,
+              dropoff: editDropoff,
+              date: editDate.toISOString(),
+              time: editTime,
+              isRoundTrip: editIsRoundTrip,
+              stops,
+            }),
+          });
 
-          const calculatedFare = await calculateTripFare(
-            editPickup,
-            editDropoff,
-            combinedDateTime,
-            editIsRoundTrip,
-            stops // Pass stops/intermediates for edit as well
-          );
-          setEditFare(calculatedFare);
+          if (!response.ok) {
+            const errorData = await response.json();
+            throw new Error(errorData.error || "Failed to calculate edit fare");
+          }
+          
+          const result = await response.json();
+          setEditFare(result.total);
+
         } catch (error) {
           console.error("Error calculating edit fare:", error);
           setEditFare(null);
@@ -677,9 +687,9 @@ export function UserDashboard() {
 
   return (
     <>
-      <div className="container mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-4 gap-4">
-        <div className="lg:col-span-2 xl:col-span-2 flex justify-center"> {/* Let the card take up more columns and center on large screens */}
-          <Card className="max-w-md min-w-0 flex-grow mx-auto lg:mx-0"> {/* Set max width smaller and min width to 0 */}
+      <div className="container mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <div className="lg:col-span-1">
+          <Card className="w-full">
             <CardHeader className="pb-4">
               <CardTitle className="text-xl">Request a Ride</CardTitle>
               <CardDescription className="text-sm">Enter your pickup and drop-off locations.</CardDescription>
@@ -733,21 +743,16 @@ export function UserDashboard() {
                       </PopoverContent>
                     </Popover>
                   </div>
-                  <div className="space-y-2 w-full md:w-40">
+                  <div className="space-y-2 w-full md:w-32">
                     <Label htmlFor="time">Time</Label>
-                    <div className="relative w-full">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground">
-                        <ClockIcon className="h-4 w-4" />
-                      </span>
-                      <Input
-                        id="time"
-                        type="time"
-                        value={time}
-                        onChange={(e) => setTime(e.target.value)}
-                        required
-                        className="w-full pl-8"
-                      />
-                    </div>
+                    <Input
+                      id="time"
+                      type="time"
+                      value={time}
+                      onChange={(e) => setTime(e.target.value)}
+                      required
+                      className="w-full"
+                    />
                   </div>
                 </div>
                 <div className="flex flex-col sm:flex-row items-center justify-between pt-1 gap-2">
