@@ -52,8 +52,12 @@ export function Header() {
         return;
       }
 
+      // Generate a random state for CSRF protection
+      const state = Math.random().toString(36).substring(2);
+      localStorage.setItem("google_oauth_state", state);
+
       const response = await fetch(
-        `/api/auth/google/url?userId=${currentUserProfile.id}`
+        `/api/google-calendar/url?userId=${currentUserProfile.id}&state=${state}`
       );
       const { url } = await response.json();
       window.location.href = url;

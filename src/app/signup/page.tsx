@@ -51,16 +51,17 @@ export default function SignUpPage() {
     setError(null);
     setAuthAction("google");
     try {
-      // This will trigger the Google sign-in popup.
-      // The signInWithGoogle function now immediately sets the user profile
-      // which should trigger the redirect logic
-      await signInWithGoogle();
-      
+      // Generate a random state for CSRF protection
+      const state = Math.random().toString(36).substring(2);
+      localStorage.setItem("google_oauth_state", state);
+      // Use the unified Google auth flow
+      const response = await fetch(`/api/google-calendar/url?state=${state}`);
+      const { url } = await response.json();
+      window.location.href = url;
       // Give a small delay to ensure state is updated
       setTimeout(() => {
         setAuthAction("");
       }, 100);
-      
     } catch (err: any) {
       setError("An error occurred during Google sign-up. Please try again.");
       console.error(err);

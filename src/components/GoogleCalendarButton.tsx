@@ -43,9 +43,9 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
       };
       localStorage.setItem('pending-calendar-action', JSON.stringify(authContext));
       
-      // Use the main Google auth flow - this will redirect the entire window
+      // Use the unified Google auth flow - this will redirect the entire window
       const response = await fetch(
-        `/api/auth/google/url?userId=${currentUserProfile.id}`
+        `/api/google-calendar/url?userId=${currentUserProfile.id}`
       );
       const { url } = await response.json();
       window.location.href = url;
@@ -75,7 +75,7 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
         refreshToken: currentUserProfile?.googleAccount?.refreshToken,
         calendarId: selectedCalendarId,
         summary: `Ride: ${ride.pickup} → ${ride.dropoff}`,
-        description: `Ride with ${ride.driver?.name || 'Driver'}\n\nPickup: ${ride.pickup}\nDropoff: ${ride.dropoff}\nFare: $${ride.fare.toFixed(2)}${ride.transportType ? `\nTransport: ${ride.transportType} ${ride.transportNumber || ''}` : ''}`,
+        description: `Ride with ${ride.driver?.name || 'Driver'}\n\nPickup: ${ride.pickup}\nDropoff: ${ride.dropoff}\nFare: $${Object.values(ride.fees ?? {}).reduce((sum: number, v) => sum + (typeof v === 'number' ? v : 0), 0).toFixed(2)}${ride.transportType ? `\nTransport: ${ride.transportType} ${ride.transportNumber || ''}` : ''}`,
         location: ride.pickup,
         startDateTime: startDateTime.toISOString(),
         endDateTime: endDateTime.toISOString(),

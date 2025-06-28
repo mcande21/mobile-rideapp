@@ -143,8 +143,12 @@ export default function ProfilePage() {
         });
         return;
       }
+      // Generate a random state for CSRF protection
+      const state = Math.random().toString(36).substring(2);
+      localStorage.setItem("google_oauth_state", state);
+
       const response = await fetch(
-        `/api/auth/google/url?userId=${currentUserProfile.id}`
+        `/api/google-calendar/url?userId=${currentUserProfile.id}&state=${state}`
       );
       const { url } = await response.json();
       window.location.href = url;
@@ -157,6 +161,39 @@ export default function ProfilePage() {
       });
     }
   };
+
+  useEffect(() => {
+    // Step 3 & 4: Validate OAuth state after redirect and always clear state
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const googleConnected = urlParams.get('google-connected');
+      const returnedState = urlParams.get('state');
+      const storedState = localStorage.getItem('google_oauth_state');
+      let stateChecked = false;
+      if (googleConnected === 'true') {
+        stateChecked = true;
+        if (returnedState && storedState && returnedState === storedState) {
+          toast({
+            title: 'Google Calendar Connected!',
+            description: 'Your Google account is now linked.',
+          });
+        } else {
+          toast({
+            title: 'Security Error',
+            description: 'OAuth state mismatch. Please try again.',
+            variant: 'destructive',
+          });
+        }
+      }
+      // Always clear state after any OAuth attempt
+      if (storedState) localStorage.removeItem('google_oauth_state');
+      // Clean up URL (optional, for better UX)
+      if (stateChecked) {
+        const cleanUrl = window.location.pathname;
+        window.history.replaceState({}, document.title, cleanUrl);
+      }
+    }
+  }, [toast]);
 
   if (loading || !currentUserProfile) {
     return (

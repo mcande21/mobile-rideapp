@@ -319,32 +319,42 @@ export function RideCard({
         </div>
 
         <div className="flex justify-between items-start">
-          <div className="flex items-center gap-3">
-            <Avatar>
-              {getAvatarUrl(ride.user) && (
-                <AvatarImage
-                  src={getAvatarUrl(ride.user)}
-                  alt={ride.user.name}
-                />
-              )}
-              <AvatarFallback 
-                style={{ backgroundColor: getAvatarBackgroundColor(ride.user) }}
-                className="text-white font-semibold relative overflow-hidden"
-              >
-                {ride.user.customAvatar?.type === 'preset' ? (
-                  <img 
-                    src={`/patterns/${ride.user.customAvatar.value}.svg`}
-                    alt="Avatar"
-                    className="w-5 h-5 object-contain"
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-center gap-3">
+              <Avatar>
+                {getAvatarUrl(ride.user) && (
+                  <AvatarImage
+                    src={getAvatarUrl(ride.user)}
+                    alt={ride.user.name}
                   />
-                ) : (
-                  getUserInitials(ride.user.name)
                 )}
-              </AvatarFallback>
-            </Avatar>
-            <div>
+                <AvatarFallback 
+                  style={{ backgroundColor: getAvatarBackgroundColor(ride.user) }}
+                  className="text-white font-semibold relative overflow-hidden"
+                >
+                  {ride.user.customAvatar?.type === 'preset' ? (
+                    <img 
+                      src={`/patterns/${ride.user.customAvatar.value}.svg`}
+                      alt="Avatar"
+                      className="w-5 h-5 object-contain"
+                    />
+                  ) : (
+                    getUserInitials(ride.user.name)
+                  )}
+                </AvatarFallback>
+              </Avatar>
               <CardTitle className="text-lg">{ride.user.name}</CardTitle>
             </div>
+            {/* Move Mark as Paid button here, only for driver and not paid */}
+            {showMarkAsPaidButton && (
+              <Button
+                onClick={handleMarkAsPaid}
+                className="bg-green-500 hover:bg-green-600 text-white h-8 mt-2 w-fit"
+                disabled={ride.isPaid}
+              >
+                Mark as Paid
+              </Button>
+            )}
           </div>
           <div className="flex flex-col items-end gap-2">
             <div className="flex items-center gap-2">
@@ -359,15 +369,6 @@ export function RideCard({
                   ) : (
                     "Pay with Venmo"
                   )}
-                </Button>
-              )}
-              {showMarkAsPaidButton && (
-                <Button
-                  onClick={handleMarkAsPaid}
-                  className="bg-green-500 hover:bg-green-600 text-white h-8"
-                  disabled={ride.isPaid}
-                >
-                  Mark as Paid
                 </Button>
               )}
               {ride.isPaid && (

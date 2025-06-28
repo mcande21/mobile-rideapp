@@ -1,5 +1,5 @@
 import { initializeApp, getApps, getApp, type FirebaseOptions } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { getAuth, connectAuthEmulator } from "firebase/auth";
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore";
 import { getFunctions, connectFunctionsEmulator } from "firebase/functions";
 // Import storage emulator connection if needed in the future
@@ -32,6 +32,7 @@ const functions = app ? getFunctions(app) : undefined;
 if (typeof window !== "undefined" && window.location.hostname === "localhost") {
   if (db) connectFirestoreEmulator(db, "localhost", 8080); // Firestore emulator
   if (functions) connectFunctionsEmulator(functions, "localhost", 5001); // Functions emulator
+  if (auth) connectAuthEmulator(auth, "http://localhost:9099"); // Auth emulator
   // if (storage) connectStorageEmulator(storage, "localhost", 9199); // Storage emulator (uncomment if needed)
   // Hosting emulator runs on port 5000 (no client SDK connection needed)
 }

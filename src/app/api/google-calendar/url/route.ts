@@ -10,13 +10,12 @@ const scopes = [
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url as string);
   const userId = searchParams.get('userId');
+  const state = searchParams.get('state');
   let url = oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    scope: scopes
+    scope: scopes,
+    state: state || undefined // Pass state if present
   });
-  // Append userId to the callback URL if present
-  if (userId) {
-    url += `&state=${encodeURIComponent(userId)}`;
-  }
+  // No need to append state manually
   return NextResponse.json({ url });
 }

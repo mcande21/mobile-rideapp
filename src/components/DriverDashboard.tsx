@@ -201,7 +201,8 @@ export function DriverDashboard() {
 
   const newRequests = rides
     .filter((ride) => ride.status === "pending")
-    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());
+    .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime())
+    .reverse();
   const acceptedRides = rides
     .filter((ride) => ride.status === "accepted")
     .sort((a, b) => new Date(a.dateTime).getTime() - new Date(b.dateTime).getTime());

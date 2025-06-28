@@ -6,6 +6,15 @@ import { doc, updateDoc } from 'firebase/firestore';
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url as string);
   const code = searchParams.get('code');
+  const state = searchParams.get('state');
+
+  // Step 2: Validate state param
+  if (!state) {
+    return NextResponse.json({ error: 'Missing state parameter' }, { status: 400 });
+  }
+
+  // Optionally, you could check state against a server-side session store here
+  // For SPA, the client will check it after redirect
 
   if (typeof code !== 'string') {
     return NextResponse.json({ error: 'Invalid code' }, { status: 400 });
@@ -20,7 +29,6 @@ export async function GET(req: Request) {
       headers: { Authorization: `Bearer ${tokens.access_token}` }
     });
     const googleUser = await userInfoRes.json();
-    console.log('Google user info response:', googleUser);
     if (!googleUser.id) {
       return NextResponse.json({ error: 'Failed to fetch Google user info', details: googleUser }, { status: 500 });
     }
@@ -28,8 +36,8 @@ export async function GET(req: Request) {
     // Get current user from session (assume you have a way to get userId from cookie/session)
     // For demo, get userId from state param (set in /api/auth/google/url)
     let userId = searchParams.get('userId');
-    if (!userId && searchParams.get('state')) {
-      userId = searchParams.get('state');
+    if (!userId && state) {
+      userId = state;
     }
     if (!userId) {
       return NextResponse.json({ error: 'No userId provided' }, { status: 400 });
@@ -59,10 +67,9 @@ export async function GET(req: Request) {
 
     // Redirect based on context or default to user dashboard
     const redirectUrl = new URL('/user', req.url);
-    
-    // Add success parameter to trigger calendar action check on client
+    // Add success parameter and state for client-side validation
     redirectUrl.searchParams.set('google-connected', 'true');
-    
+    redirectUrl.searchParams.set('state', state);
     return NextResponse.redirect(redirectUrl);
   } catch (error) {
     console.error('Error exchanging code for tokens:', error);
