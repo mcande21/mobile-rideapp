@@ -1,10 +1,18 @@
 import {onCall, HttpsError} from "firebase-functions/v2/https";
+import * as admin from "firebase-admin";
 import {FieldValue} from "firebase-admin/firestore";
 import {createHash} from "crypto";
-import { db } from "../../src/lib/firebase-admin"; // Correctly import from the shared module
+import {
+  calculateTripFare,
+  isTransportLocation,
+  calculateTransportRoundTripFare,
+} from "../../src/lib/fare";
+
+admin.initializeApp();
+const db = admin.firestore();
 
 // Helper to check for driver role
-const isDriver = async (uid: string) => {
+const isDriver = async (uid: string): Promise<admin.firestore.DocumentData> => {
   const userDoc = await db.doc(`users/${uid}`).get();
   const user = userDoc.data();
   if (!user || user.role !== "driver") {
@@ -341,7 +349,75 @@ export const editRide = onCall(async (request) => {
   return {success: true};
 });
 
-// Reschedule Ride (user can reschedule and fee is applied securely)
+// Calculate Fare
+export const calculateFare = onCall(async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Not signed in.");
+  }
+
+  try {
+    const {
+      pickup,
+      dropoff,
+      date,
+      time,
+      isRoundTrip,
+      returnDate,
+      returnTime,
+      stops,
+    } = request.data;
+
+    // Basic validation
+    if (!pickup || !dropoff || !date || !time) {
+      throw new HttpsError("invalid-argument", "Missing required fields");
+    }
+
+    const [hours, minutes] = time.split(":").map(Number);
+    const combinedDateTime = new Date(date);
+    combinedDateTime.setHours(hours, minutes, 0, 0);
+
+    const isTransportTrip =
+      isTransportLocation(pickup) || isTransportLocation(dropoff);
+
+    if (isRoundTrip && isTransportTrip && returnDate && returnTime) {
+      const [returnHours, returnMinutes] = returnTime.split(":").map(Number);
+      const returnDateTime = new Date(returnDate);
+      returnDateTime.setHours(returnHours, returnMinutes, 0, 0);
+
+      const breakdown = await calculateTransportRoundTripFare(
+          pickup,
+          dropoff,
+          combinedDateTime,
+          returnDateTime,
+          stops,
+      );
+      return breakdown;
+    } else {
+      const calculatedFare = await calculateTripFare(
+          pickup,
+          dropoff,
+          combinedDateTime,
+          isRoundTrip,
+          stops,
+      );
+      return {total: calculatedFare};
+    }
+  } catch (error: unknown) {
+    console.error("Fare calculation error:", error);
+    if (error instanceof Error && error.message.includes("No routes found")) {
+      throw new HttpsError(
+          "not-found",
+          "No route could be found for the selected date and time.",
+      );
+    }
+    throw new HttpsError(
+        "internal",
+        "Failed to calculate fare. Please try again.",
+    );
+  }
+});
+
+// Reschedule Ride
 export const rescheduleRide = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Not signed in.");
@@ -349,13 +425,19 @@ export const rescheduleRide = onCall(async (request) => {
   const uid = request.auth.uid;
   const {rideId, newDateTime, rescheduleFee, newFare} = request.data;
 
-  if (!rideId || !newDateTime || typeof newFare !== "number") {
+  if (
+    !rideId ||
+    !newDateTime ||
+    typeof newFare !== "number"
+  ) {
     throw new HttpsError("invalid-argument", "Missing required fields.");
   }
 
   const rideRef = db.doc(`rides/${rideId}`);
   const rideDoc = await rideRef.get();
-  if (!rideDoc.exists) throw new HttpsError("not-found", "Ride not found.");
+  if (!rideDoc.exists) {
+    throw new HttpsError("not-found", "Ride not found.");
+  }
   const ride = rideDoc.data();
   if (!ride || ride.user.id !== uid) {
     throw new HttpsError("permission-denied", "Not your ride.");
@@ -370,7 +452,8 @@ export const rescheduleRide = onCall(async (request) => {
   };
   // Optionally, recalculate driver_addon or other fees if necessary
   const totalFare = Object.values(fees)
-      .reduce((sum: number, v) => sum + (typeof v === "number" ? v : 0), 0);
+      .reduce((sum: number, v: unknown) =>
+        sum + (typeof v === "number" ? v : 0), 0);
   await rideRef.update({
     dateTime: newDateTime,
     fare: totalFare,

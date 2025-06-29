@@ -32,6 +32,7 @@ import { useForm } from "react-hook-form";
 import { Autocomplete } from "./Autocomplete";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import { calculateTripFare, isTransportLocation, calculateTransportRoundTripFare } from "@/lib/fare";
 import { getTotalFare } from "../lib/types";
 
@@ -292,30 +293,21 @@ export function UserDashboard() {
       if (pickup && dropoff && date && time) {
         setIsCalculatingFare(true);
         try {
-          const response = await fetch('/api/fare', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-              // Add authorization token if you have one
-            },
-            body: JSON.stringify({
-              pickup,
-              dropoff,
-              date: date.toISOString(),
-              time,
-              isRoundTrip,
-              returnDate: returnDate?.toISOString(),
-              returnTime,
-              stops,
-            }),
+          const functions = getFunctions();
+          const calculateFareFn = httpsCallable(functions, 'calculateFare');
+          
+          const response: any = await calculateFareFn({
+            pickup,
+            dropoff,
+            date: date.toISOString(),
+            time,
+            isRoundTrip,
+            returnDate: returnDate?.toISOString(),
+            returnTime,
+            stops,
           });
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || "Failed to calculate fare");
-          }
-
-          const result = await response.json();
+          const result = response.data;
 
           if (result.outbound !== undefined) {
             setFare(result.total);
@@ -360,31 +352,22 @@ export function UserDashboard() {
       if (editPickup && editDropoff && editDate && editTime) {
         setIsCalculatingEditFare(true);
         try {
-          const response = await fetch('/api/fare', {
-            method: 'POST',
-            headers: { 
-              'Content-Type': 'application/json',
-               // Add authorization token if you have one
-            },
-            body: JSON.stringify({
-              pickup: editPickup,
-              dropoff: editDropoff,
-              date: editDate.toISOString(),
-              time: editTime,
-              isRoundTrip: editIsRoundTrip,
-              stops,
-            }),
-          });
+          const functions = getFunctions();
+          const calculateFareFn = httpsCallable(functions, 'calculateFare');
 
-          if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.error || "Failed to calculate edit fare");
-          }
+          const response: any = await calculateFareFn({
+            pickup: editPickup,
+            dropoff: editDropoff,
+            date: editDate.toISOString(),
+            time: editTime,
+            isRoundTrip: editIsRoundTrip,
+            stops,
+          });
           
-          const result = await response.json();
+          const result = response.data;
           setEditFare(result.total);
 
-        } catch (error) {
+        } catch (error: any) {
           console.error("Error calculating edit fare:", error);
           setEditFare(null);
         } finally {

@@ -80,6 +80,75 @@ const trainStationAddresses = {
 };
 
 /**
+ * Fetches directions and mileage from Google Maps API.
+ * This function is designed to be run on the server (e.g., in a Cloud Function).
+ */
+async function getDirections(
+  origin: string,
+  destination: string,
+  departureTime: Date,
+  stops?: string[]
+): Promise<{ distance: { value: number }, duration: number }> {
+  const woodstockAddress = "69 Country Club Ln, Woodstock, NY 12498";
+
+  if (origin === "__WOODSTOCK__") {
+    origin = woodstockAddress;
+  }
+  if (destination === "__WOODSTOCK__") {
+    destination = woodstockAddress;
+  }
+
+  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+  if (!apiKey) {
+    throw new Error("Routes API key not set.");
+  }
+
+  // Prepare intermediates for Google API if provided
+  const intermediatesArr = (stops && stops.length > 0)
+    ? stops.map((address: string) => ({ address }))
+    : undefined;
+
+  const response = await fetch(
+    "https://routes.googleapis.com/directions/v2:computeRoutes",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "routes.duration,routes.distanceMeters",
+      },
+      body: JSON.stringify({
+        origin: { address: origin },
+        destination: { address: destination },
+        travelMode: "DRIVE",
+        routingPreference: "TRAFFIC_AWARE_OPTIMAL",
+        departureTime: departureTime.toISOString(),
+        ...(intermediatesArr ? { intermediates: intermediatesArr } : {}),
+      }),
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok || !data.routes || data.routes.length === 0) {
+    console.error("Error fetching directions:", data);
+    throw new Error(data.error?.message || "Failed to fetch directions: No routes found.");
+  }
+
+  const route = data.routes[0];
+  const miles = route.distanceMeters ? (route.distanceMeters / 1609.34) : 0;
+  const durationSeconds = (typeof route.duration === 'string')
+    ? parseInt(route.duration.replace('s', ''), 10)
+    : (route.duration?.seconds || 0);
+
+  return {
+    distance: { value: miles },
+    duration: Math.round(durationSeconds / 60), // duration in minutes
+  };
+}
+
+
+/**
  * Calculates the fare for a trip based on the pricing logic from ajsairportruns.com.
  *
  * @param pickupLocation The starting point of the trip.
@@ -96,38 +165,13 @@ export async function calculateTripFare(
   isRoundTrip: boolean,
   stops?: string[] // New optional parameter for stops/intermediates
 ): Promise<number> {
-  // Fetch mileage from the directions API
-  const directionsResponse = await fetch("/api/directions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      origin: pickupLocation,
-      destination: dropoffLocation,
-      departureTime: timeRequested.toISOString(), // Always send ISO 8601 string
-      ...(stops && stops.length > 0 ? { intermediates: stops } : {})
-    }),
-  });
-
-  if (!directionsResponse.ok) {
-    let errorBody;
-    try {
-      errorBody = await directionsResponse.json();
-    } catch (e) {
-      errorBody = { error: "Failed to parse error response." };
-    }
-    console.error("Error fetching directions:", {
-      status: directionsResponse.status,
-      statusText: directionsResponse.statusText,
-      body: errorBody,
-    });
-    throw new Error(
-      `Failed to fetch directions: ${errorBody.error || "Unknown error"}`
-    );
-  }
-
-  const directionsData = await directionsResponse.json();
+  // Fetch mileage from the new getDirections function
+  const directionsData = await getDirections(
+    pickupLocation,
+    dropoffLocation,
+    timeRequested,
+    stops
+  );
 
   const mileage = directionsData.distance.value; // in miles
 
@@ -147,29 +191,17 @@ export async function calculateTripFare(
     Westchester: { base: 140, mileageMultiplier: 1.5 },
   };
 
-  const trainStationRates = {
-    Rhinecliff: { mileageMultiplier: 1.75 },
-    Poughkeepsie: { mileageMultiplier: 1.75 },
-  };
+  // const trainStationRates = {
+  //   Rhinecliff: { mileageMultiplier: 1.75 },
+  //   Poughkeepsie: { mileageMultiplier: 1.75 },
+  // };
 
   // Helper to get distance in miles from Woodstock, NY to pickup location
   async function getDistanceFromWoodstock(pickup: string): Promise<number> {
-    const res = await fetch("/api/directions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ origin: "__WOODSTOCK__", destination: pickup }),
-    });
-    if (!res.ok) throw new Error("Failed to fetch Woodstock distance");
-    const data = await res.json();
+    const data = await getDirections("__WOODSTOCK__", pickup, new Date());
     if (!data.distance || typeof data.distance.value !== "number") throw new Error("No Woodstock distance");
     return data.distance.value; // in miles
   }
-
-  let baseFare = 0;
-  let mileageMultiplier: number;
-
-  const lowerCaseDropoff = dropoffLocation.toLowerCase();
-  const lowerCasePickup = pickupLocation.toLowerCase();
 
   const airportName = Object.keys(airportAddresses).find(
     (name) =>
@@ -190,32 +222,6 @@ export async function calculateTripFare(
           dropoffLocation
         ))
   );
-
-  if (airportName) {
-    const rate = airportRates[airportName as keyof typeof airportRates];
-    baseFare = rate.base;
-    mileageMultiplier = rate.mileageMultiplier;
-  } else if (stationName) {
-    const rate =
-      trainStationRates[stationName as keyof typeof trainStationRates];
-    mileageMultiplier = rate.mileageMultiplier;
-  } else if (
-    lowerCaseDropoff.includes("train station") ||
-    lowerCaseDropoff.includes("station") ||
-    lowerCasePickup.includes("train station") ||
-    lowerCasePickup.includes("station")
-  ) {
-    mileageMultiplier = 2;
-  } else if (
-    lowerCaseDropoff.includes("trailways") ||
-    lowerCasePickup.includes("trailways")
-  ) {
-    mileageMultiplier = 2;
-  } else if (mileage < 40) {
-    mileageMultiplier = 1.8;
-  } else {
-    mileageMultiplier = 2.3;
-  }
 
   let fare: number;
   if (airportName) {
@@ -238,13 +244,7 @@ export async function calculateTripFare(
     fare = mileage * multiplier;
   } else if (mileage < 40) {
     // Local ride: (pickup -> dropoff) + (dropoff -> Woodstock) * 1.8
-    const dropoffToWoodstockRes = await fetch("/api/directions", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ origin: dropoffLocation, destination: "__WOODSTOCK__" }),
-    });
-    if (!dropoffToWoodstockRes.ok) throw new Error("Failed to fetch dropoff to Woodstock distance");
-    const dropoffToWoodstockData = await dropoffToWoodstockRes.json();
+    const dropoffToWoodstockData = await getDirections(dropoffLocation, "__WOODSTOCK__", new Date());
     if (!dropoffToWoodstockData.distance || typeof dropoffToWoodstockData.distance.value !== "number") throw new Error("No dropoff to Woodstock distance");
     const dropoffToWoodstockMiles = dropoffToWoodstockData.distance.value; // already in miles
     fare = (mileage + dropoffToWoodstockMiles) * 1.8;
@@ -266,7 +266,7 @@ export function isTransportLocation(location: string): boolean {
   const locationLower = location.toLowerCase();
   
   // Check against airport addresses
-  for (const [airportName, addresses] of Object.entries(airportAddresses)) {
+  for (const [, addresses] of Object.entries(airportAddresses)) {
     if (addresses.some(address => 
       locationLower.includes(address.toLowerCase()) || 
       address.toLowerCase().includes(locationLower)
@@ -276,7 +276,7 @@ export function isTransportLocation(location: string): boolean {
   }
   
   // Check against train station addresses
-  for (const [stationName, addresses] of Object.entries(trainStationAddresses)) {
+  for (const [, addresses] of Object.entries(trainStationAddresses)) {
     if (addresses.some(address => 
       locationLower.includes(address.toLowerCase()) || 
       address.toLowerCase().includes(locationLower)

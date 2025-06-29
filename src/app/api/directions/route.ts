@@ -1,5 +1,4 @@
 import { NextResponse } from "next/server";
-import { decryptWoodstockAddress } from "../../../../src/lib/woodstock-crypto";
 
 export async function POST(req: Request) {
   let { origin, destination, departureTime, intermediates } = await req.json();
@@ -8,12 +7,6 @@ export async function POST(req: Request) {
   const ENCRYPTED_WOODSTOCK_ADDRESS = process.env.ENCRYPTED_WOODSTOCK_ADDRESS;
   if (!ENCRYPTED_WOODSTOCK_ADDRESS) {
     return NextResponse.json({ error: "Woodstock address not set." }, { status: 500 });
-  }
-  if (origin === "__WOODSTOCK__") {
-    origin = decryptWoodstockAddress(ENCRYPTED_WOODSTOCK_ADDRESS);
-  }
-  if (destination === "__WOODSTOCK__") {
-    destination = decryptWoodstockAddress(ENCRYPTED_WOODSTOCK_ADDRESS);
   }
 
   if (!origin || !destination) {
