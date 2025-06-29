@@ -77,7 +77,7 @@ service cloud.firestore {
                       'base' in incomingData().fees && incomingData().fees.base >= 0 &&
                       // A user cannot assign a driver or add other fees on creation.
                       !('driver' in incomingData()) &&
-                      incomingData().keys().hasOnly(['user', 'status', 'pickup', 'dropoff', 'dateTime', 'fees', 'isRoundTrip', 'returnTime', 'transportType', 'transportNumber', 'stops', 'tripLabel']);
+                      incomingData().keys().hasOnly(['user', 'status', 'pickup', 'dropoff', 'dateTime', 'fees', 'isRoundTrip', 'returnTime', 'transportType', 'transportNumber', 'stops', 'tripLabel', 'createdAt', 'duration', 'direction', 'linkedTripId']);
 
 
       // Updates are complex. We only allow specific, valid state transitions.

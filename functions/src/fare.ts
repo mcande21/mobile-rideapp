@@ -109,7 +109,7 @@ async function getDirections(
     destination = woodstockAddress;
   }
 
-  const apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY;
+  const apiKey = process.env.GOOGLE_API_KEY;
   if (!apiKey) {
     throw new Error("Routes API key not set.");
   }
@@ -201,10 +201,14 @@ export async function calculateTripFare(
   /**
    * Helper to get distance in miles from Woodstock, NY.
    * @param {string} pickup The pickup location.
+   * @param {Date} departureTime The requested time for the trip.
    * @return {Promise<number>} The distance in miles.
    */
-  async function getDistanceFromWoodstock(pickup: string): Promise<number> {
-    const data = await getDirections("__WOODSTOCK__", pickup, new Date());
+  async function getDistanceFromWoodstock(
+      pickup: string,
+      departureTime: Date,
+  ): Promise<number> {
+    const data = await getDirections("__WOODSTOCK__", pickup, departureTime);
     if (!data.distance || typeof data.distance.value !== "number") {
       throw new Error("No Woodstock distance");
     }
@@ -239,14 +243,14 @@ export async function calculateTripFare(
       nonAirportAddress = dropoffLocation;
     }
     const woodstockDistMiles = await
-    getDistanceFromWoodstock(nonAirportAddress);
+    getDistanceFromWoodstock(nonAirportAddress, timeRequested);
     fare = base + (multiplier * woodstockDistMiles);
   } else if (stationName) {
     const multiplier = 1.75;
     fare = mileage * multiplier;
   } else if (mileage < 40) {
     const dropoffToWoodstockData = await getDirections(
-        dropoffLocation, "__WOODSTOCK__", new Date(),
+        dropoffLocation, "__WOODSTOCK__", timeRequested,
     );
     if (!dropoffToWoodstockData.distance ||
       typeof dropoffToWoodstockData.distance.value !== "number") {

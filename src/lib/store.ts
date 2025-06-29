@@ -405,6 +405,16 @@ export const useRideStore = create<RideState>((set, get) => ({
     const { currentUserProfile } = get();
     if (!currentUserProfile || !db) return;
 
+    // Ensure a valid user payload, especially for avatarUrl.
+    const userPayload = {
+      id: currentUserProfile.id,
+      name: currentUserProfile.name || "Unknown User",
+      avatarUrl: currentUserProfile.avatarUrl || null, // Firestore forbids 'undefined'
+      role: currentUserProfile.role || "user",
+      phoneNumber: currentUserProfile.phoneNumber || null,
+    };
+    console.log("Constructed user payload for new ride:", userPayload);
+
     try {
       // Pass stops as intermediates to directions API
       const directionsBody: any = { origin: pickup, destination: dropoff };
@@ -424,29 +434,13 @@ export const useRideStore = create<RideState>((set, get) => ({
       }
       const { durationMinutes } = await directionsResponse.json();
 
-      const userPayload: Partial<User> = {
-        id: currentUserProfile.id,
-        name: currentUserProfile.name,
-        avatarUrl: currentUserProfile.avatarUrl,
-        role: currentUserProfile.role,
-      };
-      if (currentUserProfile.phoneNumber) {
-        userPayload.phoneNumber = currentUserProfile.phoneNumber;
-      }
-      if (currentUserProfile.homeAddress) {
-        userPayload.homeAddress = currentUserProfile.homeAddress;
-      }
-
-      const { transportType, linkedTripId, tripLabel, ...otherDetails } =
-        details;
-
-      // --- FEES OBJECT ---
-      // Always include base fee, and optionally add other fees (e.g., day_of, reschedule, etc.)
       // For now, only base is required; others can be added by backend or UI as needed
       const fees: { base: number; [key: string]: number } = {
         base: Number(fare.toFixed(2)),
       };
       // Optionally add more fees here if needed (e.g., day_of, reschedule, etc.)
+
+      const { transportType, linkedTripId, tripLabel, ...otherDetails } = details;
 
       const newRide: Omit<Ride, "id" | "user"> & { user: Partial<User> } = {
         user: userPayload,

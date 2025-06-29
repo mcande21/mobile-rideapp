@@ -6,9 +6,10 @@ export type Direction = "arrival" | "departure";
 export interface User {
   id: string; // Corresponds to Firebase Auth UID
   name: string;
-  avatarUrl: string;
+  email?: string;
+  avatarUrl?: string | null; // Allow null for Firestore compatibility
   role: UserRole;
-  phoneNumber?: string;
+  phoneNumber?: string | null;
   homeAddress?: string;
   venmoUsername?: string;
   customAvatar?: {
