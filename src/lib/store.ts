@@ -1,9 +1,16 @@
 "use client";
 
 import { create } from "zustand";
-import type { Ride, User, TransportType, Direction, UserRole, Comment } from "./types";
-import { auth, db, isConfigured } from "./firebase";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import type {
+  Ride,
+  User,
+  TransportType,
+  Direction,
+  UserRole,
+  Comment,
+} from "./types";
+import { auth, db, functions } from "./firebase";
+import { httpsCallable } from "firebase/functions";
 import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
@@ -35,11 +42,14 @@ import {
 import { seedUsers } from "./mock-data";
 
 interface RideState {
+  // --- STATE ---
   rides: Ride[];
   currentUser: FirebaseUser | null;
   currentUserProfile: User | null;
   loading: boolean;
   error: string | null;
+
+  // --- AUTH METHODS ---
   initAuth: () => (() => void) | void;
   login: (email: string, password: string) => Promise<void>;
   signUp: (
@@ -52,13 +62,17 @@ interface RideState {
   logout: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   linkWithGoogle: () => Promise<void>;
+
+  // --- USER PROFILE METHODS ---
   updateUserProfile: (data: {
     name: string;
     phoneNumber: string;
     homeAddress: string;
     venmoUsername?: string;
-    customAvatar?: { type: 'color' | 'preset' | 'google'; value: string };
+    customAvatar?: { type: "color" | "preset" | "google"; value: string };
   }) => Promise<void>;
+
+  // --- RIDE MANAGEMENT (USER) ---
   addRide: (
     pickup: string,
     dropoff: string,
@@ -90,33 +104,36 @@ interface RideState {
     },
     stops?: string[] // <-- add stops param
   ) => Promise<void>;
-  acceptRide: (id: string) => Promise<void>;
-  rejectRide: (id: string) => Promise<void>;
-  cancelRide: (id: string) => Promise<boolean>;
-  cancelRideByDriver: (id: string) => Promise<void>;
-  completeRide: (id: string) => Promise<void>;
-  updateRideFare: (id: string, newFare: number) => Promise<void>;
-  markAsPaid: (id: string) => Promise<void>;
-  addComment: (
-    rideId: string,
-    text: string,
-    user: Pick<User, "id" | "name" | "avatarUrl">
-  ) => Promise<void>;
-  cleanupOldDeniedRides: () => Promise<void>;
   rescheduleRide: (
     rideId: string,
     newDateTime: string,
     rescheduleFee: number,
     newFare: number
-  ) => Promise<void>; // <-- Added rescheduleRide
+  ) => Promise<void>;
+  cancelRide: (id: string) => Promise<boolean>;
+  addComment: (rideId: string, text: string) => Promise<void>;
+
+  // --- RIDE MANAGEMENT (DRIVER) ---
+  acceptRide: (id: string) => Promise<void>;
+  rejectRide: (id: string) => Promise<void>;
+  cancelRideByDriver: (id: string) => Promise<void>;
+  completeRide: (id: string) => Promise<void>;
+  updateRideFare: (id: string, newFare: number) => Promise<void>;
+  markAsPaid: (id: string) => Promise<void>;
+
+  // --- UTILITY METHODS ---
+  cleanupOldDeniedRides: () => Promise<void>;
 }
 
 export const useRideStore = create<RideState>((set, get) => ({
+  // --- STATE ---
   rides: [],
   currentUser: null,
   currentUserProfile: null,
   loading: true,
   error: null,
+
+  // --- AUTH METHODS ---
   initAuth: () => {
     if (!auth) {
       set({ loading: false });
@@ -136,7 +153,7 @@ export const useRideStore = create<RideState>((set, get) => ({
         let userDoc;
         let retries = 3;
         const userDocRef = doc(db!, "users", user.uid);
-        
+
         while (retries > 0) {
           userDoc = await getDoc(userDocRef);
           if (userDoc.exists()) {
@@ -145,47 +162,76 @@ export const useRideStore = create<RideState>((set, get) => ({
           // If document doesn't exist, wait a bit and retry
           // This handles the case where Google sign-up is still creating the document
           if (retries > 1) {
-            await new Promise(resolve => setTimeout(resolve, 500));
+            await new Promise((resolve) => setTimeout(resolve, 500));
           }
           retries--;
         }
-        
+
         if (userDoc && userDoc.exists()) {
           const profile = { id: user.uid, ...userDoc.data() } as User;
           set({ currentUserProfile: profile });
 
           const ridesCollection = collection(db!, "rides");
           // --- START REPLACEMENT LOGIC ---
-          if (profile.role === 'driver') {
-              // --- DRIVER ---
-              // 1. Get all pending rides
-              const pendingQuery = query(ridesCollection, where("status", "==", "pending"));
-              // 2. Get all rides accepted by THIS driver
-              const acceptedQuery = query(ridesCollection, where("driver.id", "==", user.uid));
+          if (profile.role === "driver") {
+            // --- DRIVER ---
+            // 1. Get all pending rides
+            const pendingQuery = query(
+              ridesCollection,
+              where("status", "==", "pending")
+            );
+            // 2. Get all rides accepted by THIS driver
+            const acceptedQuery = query(
+              ridesCollection,
+              where("driver.id", "==", user.uid)
+            );
 
-              // Listen to both queries and combine the results
-              const unsubPending = onSnapshot(pendingQuery, (pendingSnapshot) => {
-                  const pendingRides = pendingSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ride));
-                  const unsubAccepted = onSnapshot(acceptedQuery, (acceptedSnapshot) => {
-                      const acceptedRides = acceptedSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ride));
-                      // Combine and remove duplicates (if any)
-                      const allRides = [...pendingRides, ...acceptedRides];
-                      const uniqueRides = Array.from(new Map(allRides.map(ride => [ride.id, ride])).values());
-                      set({ rides: uniqueRides.sort((a, b) => (b.createdAt?.toMillis() ?? 0) - (a.createdAt?.toMillis() ?? 0)) });
-                  });
-                  unsubRides = () => {
-                      unsubPending();
-                      unsubAccepted();
-                  };
-              });
+            // Listen to both queries and combine the results
+            const unsubPending = onSnapshot(
+              pendingQuery,
+              (pendingSnapshot) => {
+                const pendingRides = pendingSnapshot.docs.map(
+                  (doc) => ({ id: doc.id, ...doc.data() } as Ride)
+                );
+                const unsubAccepted = onSnapshot(
+                  acceptedQuery,
+                  (acceptedSnapshot) => {
+                    const acceptedRides = acceptedSnapshot.docs.map(
+                      (doc) => ({ id: doc.id, ...doc.data() } as Ride)
+                    );
+                    // Combine and remove duplicates (if any)
+                    const allRides = [...pendingRides, ...acceptedRides];
+                    const uniqueRides = Array.from(
+                      new Map(allRides.map((ride) => [ride.id, ride])).values()
+                    );
+                    set({
+                      rides: uniqueRides.sort(
+                        (a, b) =>
+                          (b.createdAt?.toMillis() ?? 0) -
+                          (a.createdAt?.toMillis() ?? 0)
+                      ),
+                    });
+                  }
+                );
+                unsubRides = () => {
+                  unsubPending();
+                  unsubAccepted();
+                };
+              }
+            );
           } else {
-              // --- REGULAR USER ---
-              // Get only the rides created by this user
-              const userRidesQuery = query(ridesCollection, where("user.id", "==", user.uid));
-              unsubRides = onSnapshot(userRidesQuery, (snapshot) => {
-                  const rides = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Ride));
-                  set({ rides });
-              });
+            // --- REGULAR USER ---
+            // Get only the rides created by this user
+            const userRidesQuery = query(
+              ridesCollection,
+              where("user.id", "==", user.uid)
+            );
+            unsubRides = onSnapshot(userRidesQuery, (snapshot) => {
+              const rides = snapshot.docs.map(
+                (doc) => ({ id: doc.id, ...doc.data() } as Ride)
+              );
+              set({ rides });
+            });
           }
           // --- END REPLACEMENT LOGIC ---
           set({ loading: false });
@@ -301,6 +347,8 @@ export const useRideStore = create<RideState>((set, get) => ({
     if (!auth) throw new Error("Firebase not configured");
     await signOut(auth);
   },
+
+  // --- USER PROFILE METHODS ---
   updateUserProfile: async (data) => {
     const { currentUser } = get();
     if (!db || !currentUser) throw new Error("User not logged in");
@@ -313,7 +361,7 @@ export const useRideStore = create<RideState>((set, get) => ({
       venmoUsername: "",
       customAvatar: {
         type: "preset",
-        value: "car-svgrepo-com"
+        value: "car-svgrepo-com",
       },
     };
     // Only overwrite customAvatar if provided and not undefined
@@ -321,7 +369,9 @@ export const useRideStore = create<RideState>((set, get) => ({
       ...defaultData,
       ...data,
       customAvatar:
-        data.customAvatar !== undefined ? data.customAvatar : defaultData.customAvatar,
+        data.customAvatar !== undefined
+          ? data.customAvatar
+          : defaultData.customAvatar,
     };
     await updateDoc(userDocRef, uploadData);
     // Fetch the updated profile and update the store
@@ -343,6 +393,8 @@ export const useRideStore = create<RideState>((set, get) => ({
       });
     }
   },
+
+  // --- RIDE MANAGEMENT (USER) ---
   addRide: async (
     pickup,
     dropoff,
@@ -385,7 +437,8 @@ export const useRideStore = create<RideState>((set, get) => ({
         userPayload.homeAddress = currentUserProfile.homeAddress;
       }
 
-      const { transportType, linkedTripId, tripLabel, ...otherDetails } = details;
+      const { transportType, linkedTripId, tripLabel, ...otherDetails } =
+        details;
 
       // --- FEES OBJECT ---
       // Always include base fee, and optionally add other fees (e.g., day_of, reschedule, etc.)
@@ -493,98 +546,88 @@ export const useRideStore = create<RideState>((set, get) => ({
       throw error;
     }
   },
-  /**
-   * Reschedule a ride and apply a reschedule fee (calls Cloud Function)
-   * @param rideId string
-   * @param newDateTime string (ISO)
-   * @param rescheduleFee number
-   * @param newFare number (fare + fee)
-   */
   rescheduleRide: async (
     rideId: string,
     newDateTime: string,
     rescheduleFee: number,
     newFare: number
   ) => {
-    const functionsInstance = getFunctions();
-    const rescheduleRideFn = httpsCallable(functionsInstance, "rescheduleRide");
-    await rescheduleRideFn({ rideId, newDateTime, rescheduleFee, newFare });
+    if (!functions) throw new Error("Functions not initialized");
+    const rescheduleRideFn = httpsCallable(functions, "rescheduleRide");
+    await rescheduleRideFn({
+      rideId,
+      newDateTime,
+      rescheduleFee,
+      newFare,
+    });
   },
+  cancelRide: async (id: string) => {
+    if (!functions) throw new Error("Functions not initialized");
+    const cancelRideFn = httpsCallable(functions, "cancelRide");
+    const result = await cancelRideFn({ rideId: id });
+    return (result.data as { isLateCancellation: boolean }).isLateCancellation;
+  },
+  addComment: async (rideId: string, text: string) => {
+    if (!functions) throw new Error("Functions not initialized");
+    const addCommentFn = httpsCallable(functions, "addComment");
+    await addCommentFn({ rideId, text });
+  },
+
+  // --- RIDE MANAGEMENT (DRIVER) ---
   acceptRide: async (id: string) => {
-    const functionsInstance = getFunctions();
-    const acceptRideFn = httpsCallable(functionsInstance, "acceptRide");
+    if (!functions) throw new Error("Functions not initialized");
+    const acceptRideFn = httpsCallable(functions, "acceptRide");
     await acceptRideFn({ rideId: id });
   },
   rejectRide: async (id: string) => {
-    const functionsInstance = getFunctions();
-    const rejectRideFn = httpsCallable(functionsInstance, "rejectRide");
+    if (!functions) throw new Error("Functions not initialized");
+    const rejectRideFn = httpsCallable(functions, "rejectRide");
     await rejectRideFn({ rideId: id });
   },
-  cancelRide: async (id: string): Promise<boolean> => {
-    const functionsInstance = getFunctions();
-    const cancelRideFn = httpsCallable(functionsInstance, "cancelRide");
-    const result: any = await cancelRideFn({ rideId: id });
-    return result.data?.isLateCancellation ?? false;
-  },
   cancelRideByDriver: async (id: string) => {
-    const functionsInstance = getFunctions();
-    const cancelRideByDriverFn = httpsCallable(functionsInstance, "cancelRideByDriver");
+    if (!functions) throw new Error("Functions not initialized");
+    const cancelRideByDriverFn = httpsCallable(
+      functions,
+      "cancelRideByDriver"
+    );
     await cancelRideByDriverFn({ rideId: id });
   },
   completeRide: async (id: string) => {
-    const functionsInstance = getFunctions();
-    const completeRideFn = httpsCallable(functionsInstance, "completeRide");
+    if (!functions) throw new Error("Functions not initialized");
+    const completeRideFn = httpsCallable(functions, "completeRide");
     await completeRideFn({ rideId: id });
   },
   updateRideFare: async (id: string, newFare: number) => {
-    const functionsInstance = getFunctions();
-    const updateRideFareFn = httpsCallable(functionsInstance, "updateRideFare");
+    if (!functions) throw new Error("Functions not initialized");
+    const updateRideFareFn = httpsCallable(functions, "updateRideFare");
     await updateRideFareFn({ rideId: id, newFare });
   },
   markAsPaid: async (id: string) => {
-    const functionsInstance = getFunctions();
-    const markAsPaidFn = httpsCallable(functionsInstance, "markAsPaid");
+    if (!functions) throw new Error("Functions not initialized");
+    const markAsPaidFn = httpsCallable(functions, "markAsPaid");
     await markAsPaidFn({ rideId: id });
   },
-  addComment: async (rideId, text, user) => {
-    const functionsInstance = getFunctions();
-    const addCommentFn = httpsCallable(functionsInstance, "addComment");
-    await addCommentFn({ rideId, text });
-  },
+
+  // --- UTILITY METHODS ---
   cleanupOldDeniedRides: async () => {
-    if (!db) throw new Error("Firebase not configured");
-    
+    const { rides } = get();
     const now = new Date();
-    const threeWeeksAgo = new Date(now.getTime() - (3 * 7 * 24 * 60 * 60 * 1000)); // 3 weeks in milliseconds
-    
-    const ridesCollection = collection(db, "rides");
-    const q = query(ridesCollection);
-    const snapshot = await getDocs(q);
-    
-    const batch = writeBatch(db);
-    let deletedCount = 0;
-    
-    snapshot.docs.forEach((docSnapshot) => {
-      const ride = docSnapshot.data() as Ride;
-      if (ride.status === "denied" && ride.createdAt) {
-        // Handle both Firestore Timestamp and regular Date
-        const createdDate = ride.createdAt.toDate ? ride.createdAt.toDate() : new Date(ride.createdAt);
-        
-        if (createdDate < threeWeeksAgo) {
-          batch.delete(docSnapshot.ref);
-          deletedCount++;
-        }
+    const oneDay = 24 * 60 * 60 * 1000;
+    const batch = writeBatch(db!);
+    let count = 0;
+    rides.forEach((ride) => {
+      if (
+        ride.status === "denied" &&
+        ride.createdAt &&
+        now.getTime() - ride.createdAt.toMillis() > oneDay
+      ) {
+        const rideRef = doc(db!, "rides", ride.id);
+        batch.delete(rideRef);
+        count++;
       }
     });
-    
-    if (deletedCount > 0) {
+    if (count > 0) {
       await batch.commit();
-      console.log(`Cleaned up ${deletedCount} old denied rides`);
     }
   },
 }));
-
-if (isConfigured) {
-  auth;
-  db;
-}

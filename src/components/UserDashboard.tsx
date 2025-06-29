@@ -32,7 +32,8 @@ import { useForm } from "react-hook-form";
 import { Autocomplete } from "./Autocomplete";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { getFunctions, httpsCallable } from "firebase/functions";
+import { httpsCallable } from "firebase/functions";
+import { functions } from "@/lib/firebase";
 import { calculateTripFare, isTransportLocation, calculateTransportRoundTripFare } from "@/lib/fare";
 import { getTotalFare } from "../lib/types";
 
@@ -293,7 +294,7 @@ export function UserDashboard() {
       if (pickup && dropoff && date && time) {
         setIsCalculatingFare(true);
         try {
-          const functions = getFunctions();
+          if (!functions) throw new Error("Functions not initialized");
           const calculateFareFn = httpsCallable(functions, 'calculateFare');
           
           const response: any = await calculateFareFn({
@@ -352,7 +353,7 @@ export function UserDashboard() {
       if (editPickup && editDropoff && editDate && editTime) {
         setIsCalculatingEditFare(true);
         try {
-          const functions = getFunctions();
+          if (!functions) throw new Error("Functions not initialized");
           const calculateFareFn = httpsCallable(functions, 'calculateFare');
 
           const response: any = await calculateFareFn({
