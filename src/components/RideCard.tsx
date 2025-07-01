@@ -272,11 +272,7 @@ export function RideCard({
     }
     setIsPostingComment(true);
     try {
-      await addComment(ride.id, sanitized, {
-        id: currentUserProfile.id,
-        name: currentUserProfile.name,
-        avatarUrl: currentUserProfile.avatarUrl,
-      });
+      await addComment(ride.id, sanitized);
       setCommentText("");
       setShowComments(true);
     } catch (error) {
