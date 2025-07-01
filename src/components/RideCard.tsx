@@ -35,6 +35,7 @@ import { useRideStore } from "@/lib/store";
 import { Textarea } from "./ui/textarea";
 import { getAvatarUrl, getAvatarBackgroundColor, getUserInitials } from "@/lib/utils";
 import { GoogleCalendarButton } from "./GoogleCalendarButton";
+import { bffApi, BffApiService } from "@/lib/bff-api";
 
 interface FlightData {
   flight_status: string;
@@ -173,14 +174,14 @@ export function RideCard({
     if (ride.transportType === "flight" && ride.transportNumber && ride.status === "accepted") {
       setIsLoadingFlightData(true);
       try {
-        const response = await fetch(
-          `/api/flight?flightNumber=${ride.transportNumber}`
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setFlightData(data);
+        const response = await bffApi.getFlightData({ 
+          flightNumber: ride.transportNumber 
+        });
+        
+        if (response.success && response.data) {
+          setFlightData(response.data);
         } else {
-          console.error("Failed to fetch flight data");
+          console.error("Failed to fetch flight data:", response.error);
         }
       } catch (error) {
         console.error("Error fetching flight data:", error);
@@ -214,25 +215,30 @@ export function RideCard({
   useEffect(() => {
     if (isEditingFare) {
       // Only fetch if editing and ride has been scheduled before
-      fetch("/api/reschedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pickupLocation: ride.pickup,
-          dropoffLocation: ride.dropoff,
-          oldTime: ride.dateTime,
-          newTime: ride.dateTime, // For now, assume same time; update as needed
-          mileageMeters: ride.duration ? ride.duration * 1609.34 / 60 : 0, // rough estimate
-        }),
-      })
-        .then((res) => res.json())
-        .then((data) => {
-          setRescheduleFee(data.fee || 0);
-          setShowFeeBreakdown(true);
-        })
-        .catch(() => {
+      const fetchRescheduleFee = async () => {
+        try {
+          const response = await bffApi.calculateRescheduleFee({
+            pickupLocation: ride.pickup,
+            dropoffLocation: ride.dropoff,
+            oldTime: ride.dateTime,
+            newTime: ride.dateTime, // For now, assume same time; update as needed
+            mileageMeters: ride.duration ? ride.duration * 1609.34 / 60 : 0, // rough estimate
+          });
+          
+          if (response.success && response.data) {
+            setRescheduleFee(response.data.fee || 0);
+            setShowFeeBreakdown(true);
+          } else {
+            console.error("Failed to fetch reschedule fee:", response.error);
+            setRescheduleFee(null);
+          }
+        } catch (error) {
+          console.error("Error fetching reschedule fee:", error);
           setRescheduleFee(null);
-        });
+        }
+      };
+      
+      fetchRescheduleFee();
       setDayOfFee(getDayOfSchedulingFee(ride.dateTime));
     } else {
       setShowFeeBreakdown(false);

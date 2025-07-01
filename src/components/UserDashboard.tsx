@@ -28,6 +28,7 @@ import {
   Car, Loader2, Calendar as CalendarIcon, Plane, Train, Bus, BadgeDollarSign, Edit, Save, Clock as ClockIcon
 } from "lucide-react";
 import type { Direction, TransportType, Ride } from "@/lib/types";
+import { bffApi, BffApiService } from "@/lib/bff-api";
 import { useForm } from "react-hook-form";
 import { Autocomplete } from "./Autocomplete";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -179,21 +180,22 @@ export function UserDashboard() {
     mileageMeters: number;
   }) {
     try {
-      const res = await fetch("/api/reschedule", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pickupLocation,
-          dropoffLocation,
-          oldTime,
-          newTime,
-          mileageMeters,
-        }),
+      const response = await bffApi.calculateRescheduleFee({
+        pickupLocation,
+        dropoffLocation,
+        oldTime,
+        newTime,
+        mileageMeters,
       });
-      if (!res.ok) return 0;
-      const data = await res.json();
-      return data.fee || 0;
-    } catch {
+      
+      if (response.success && response.data) {
+        return response.data.fee || 0;
+      } else {
+        console.error("Failed to fetch reschedule fee:", response.error);
+        return 0;
+      }
+    } catch (error) {
+      console.error("Error fetching reschedule fee:", error);
       return 0;
     }
   }

@@ -4,6 +4,7 @@ import { Calendar, Check } from 'lucide-react';
 import type { Ride } from '@/lib/types';
 import { useRideStore } from '@/lib/store';
 import { useToast } from '@/hooks/use-toast';
+import { bffApi, BffApiService } from '@/lib/bff-api';
 
 interface GoogleCalendarButtonProps {
   ride: Ride;
@@ -44,11 +45,13 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
       localStorage.setItem('pending-calendar-action', JSON.stringify(authContext));
       
       // Use the unified Google auth flow - this will redirect the entire window
-      const response = await fetch(
-        `/api/google-calendar/url?userId=${currentUserProfile.id}`
-      );
-      const { url } = await response.json();
-      window.location.href = url;
+      const response = await bffApi.getGoogleCalendarAuthUrl(currentUserProfile.id);
+      
+      if (response.success && response.data?.url) {
+        window.location.href = response.data.url;
+      } else {
+        throw new Error(response.error || 'Failed to get auth URL');
+      }
     } catch (error) {
       console.error("Error fetching Google Auth URL:", error);
       toast({
@@ -83,21 +86,23 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
         timeZone: 'America/New_York'
       };
 
-      const response = await fetch('/api/google-calendar/add-event', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(eventData),
+      const response = await bffApi.addGoogleCalendarEvent({
+        accessToken: token,
+        refreshToken: currentUserProfile?.googleAccount?.refreshToken,
+        calendarId: selectedCalendarId,
+        summary: `Ride: ${ride.pickup} → ${ride.dropoff}`,
+        description: `Ride with ${ride.driver?.name || 'Driver'}\n\nPickup: ${ride.pickup}\nDropoff: ${ride.dropoff}\nFare: $${Object.values(ride.fees ?? {}).reduce((sum: number, v) => sum + (typeof v === 'number' ? v : 0), 0).toFixed(2)}${ride.transportType ? `\nTransport: ${ride.transportType} ${ride.transportNumber || ''}` : ''}`,
+        location: ride.pickup,
+        startDateTime: startDateTime.toISOString(),
+        endDateTime: endDateTime.toISOString(),
+        attendees: ride.driver?.googleAccount?.email ? [ride.driver.googleAccount.email] : [],
+        timeZone: 'America/New_York'
       });
 
-      const result = await response.json();
-
-      if (result.success) {
+      if (response.success && response.data?.success) {
         // Event added successfully - NO new window/tab opened
         setEventAdded(true);
-        const calendarName = result.calendar?.summary || 
-                            currentUserProfile?.googleAccount?.selectedCalendarName || 
+        const calendarName = currentUserProfile?.googleAccount?.selectedCalendarName || 
                             'Google Calendar';
         setAddedToCalendar(calendarName);
         
@@ -106,16 +111,19 @@ export function GoogleCalendarButton({ ride }: GoogleCalendarButtonProps) {
           title: "Event Added!",
           description: `Ride event has been added to ${calendarName}`,
         });
-      } else if (result.needsReauth) {
-        // Token expired, need to re-authenticate
-        setAccessToken(null);
-        toast({
-          title: "Authentication Required",
-          description: "Your Google Calendar access has expired. Please reconnect.",
-          variant: "destructive",
-        });
       } else {
-        throw new Error(result.error || 'Failed to add event');
+        // Check if it's an authentication error
+        if (response.status === 401) {
+          // Token expired, need to re-authenticate
+          setAccessToken(null);
+          toast({
+            title: "Authentication Required",
+            description: "Your Google Calendar access has expired. Please reconnect.",
+            variant: "destructive",
+          });
+        } else {
+          throw new Error(response.error || 'Failed to add event');
+        }
       }
     } catch (error) {
       console.error('Error adding event to calendar:', error);

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Control, FieldValues, Path, useController } from "react-hook-form";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
+import { bffApi, BffApiService } from "@/lib/bff-api";
 
 interface AutocompleteProps<T extends FieldValues> {
   control?: Control<T>;
@@ -32,14 +33,31 @@ export function Autocomplete<T extends FieldValues>({
       setSuggestions([]);
       return;
     }
-    const res = await fetch(`/api/places-autocomplete?input=${encodeURIComponent(input)}`);
-    const data = await res.json();
-    if (data.suggestions) {
-      setSuggestions(data.suggestions.map((s: any) => ({
-        text: s.placePrediction.text, // text is an object
-        placeId: s.placePrediction.placeId,
-      })));
-    } else {
+    
+    try {
+      const response = await bffApi.getPlacesAutocomplete({ input });
+      
+      if (response.success && response.data) {
+        if (response.data.suggestions) {
+          setSuggestions(response.data.suggestions.map((s: any) => ({
+            text: s.placePrediction.text, // text is an object
+            placeId: s.placePrediction.placeId,
+          })));
+        } else if (response.data.predictions) {
+          // Fallback for different response format
+          setSuggestions(response.data.predictions.map((p: any) => ({
+            text: { text: p.description, matches: [] },
+            placeId: p.place_id,
+          })));
+        } else {
+          setSuggestions([]);
+        }
+      } else {
+        console.error("Failed to fetch suggestions:", response.error);
+        setSuggestions([]);
+      }
+    } catch (error) {
+      console.error("Error fetching suggestions:", error);
       setSuggestions([]);
     }
   };

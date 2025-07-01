@@ -39,6 +39,7 @@ import {
   arrayUnion,
   where, // <-- Added import
 } from "firebase/firestore";
+import { bffApi, BffApiService } from "./bff-api";
 import { seedUsers } from "./mock-data";
 
 interface RideState {
@@ -401,23 +402,20 @@ export const useRideStore = create<RideState>((set, get) => ({
     console.log("Constructed user payload for new ride:", userPayload);
 
     try {
-      // Pass stops as intermediates to directions API
-      const directionsBody: any = { origin: pickup, destination: dropoff };
-      if (stops && stops.length > 0) {
-        directionsBody["intermediates"] = stops;
-      }
-      const directionsResponse = await fetch("/api/directions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(directionsBody),
-      });
+      // Pass stops as intermediates to directions API using BFF
+      const directionsRequest = { 
+        origin: pickup, 
+        destination: dropoff,
+        ...(stops && stops.length > 0 ? { intermediates: stops } : {})
+      };
+      
+      const directionsResponse = await bffApi.getDirections(directionsRequest);
 
-      if (!directionsResponse.ok) {
-        throw new Error("Failed to fetch directions");
+      if (!directionsResponse.success) {
+        throw new Error(directionsResponse.error || "Failed to fetch directions");
       }
-      const { durationMinutes } = await directionsResponse.json();
+      
+      const { durationMinutes } = directionsResponse.data || { durationMinutes: 60 };
 
       // For now, only base is required; others can be added by backend or UI as needed
       const fees: { base: number; [key: string]: number } = {
@@ -467,23 +465,20 @@ export const useRideStore = create<RideState>((set, get) => ({
   ) => {
     if (!db) return;
     try {
-      // Pass stops as intermediates to directions API
-      const directionsBody: any = { origin: pickup, destination: dropoff };
-      if (stops && stops.length > 0) {
-        directionsBody["intermediates"] = stops;
-      }
-      const directionsResponse = await fetch("/api/directions", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(directionsBody),
-      });
+      // Pass stops as intermediates to directions API using BFF
+      const directionsRequest = { 
+        origin: pickup, 
+        destination: dropoff,
+        ...(stops && stops.length > 0 ? { intermediates: stops } : {})
+      };
+      
+      const directionsResponse = await bffApi.getDirections(directionsRequest);
 
-      if (!directionsResponse.ok) {
-        throw new Error("Failed to fetch directions");
+      if (!directionsResponse.success) {
+        throw new Error(directionsResponse.error || "Failed to fetch directions");
       }
-      const { durationMinutes } = await directionsResponse.json();
+      
+      const { durationMinutes } = directionsResponse.data || { durationMinutes: 60 };
 
       const rideRef = doc(db, "rides", rideId);
       // Accept returnTime as an extra property if present

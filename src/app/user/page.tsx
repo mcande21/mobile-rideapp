@@ -7,6 +7,7 @@ import { APIProvider } from "@vis.gl/react-google-maps";
 import { UserDashboard } from "@/components/UserDashboard";
 import { Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { bffApi, BffApiService } from '@/lib/bff-api';
 
 function UserPageContent() {
   const { currentUserProfile, loading, rides } = useRideStore();
@@ -65,36 +66,29 @@ function UserPageContent() {
   }, [searchParams, currentUserProfile, rides, toast]);
 
   const handleAutoCalendarAdd = async (ride: any) => {
+    if (!currentUserProfile?.googleAccount) return;
+    
     try {
       const startDateTime = new Date(ride.dateTime);
       const endDateTime = new Date(startDateTime.getTime() + (ride.duration || 60) * 60000);
       
-      const selectedCalendarId = currentUserProfile?.googleAccount?.selectedCalendarId || 'primary';
+      const selectedCalendarId = currentUserProfile.googleAccount.selectedCalendarId || 'primary';
 
-      const eventData = {
-        accessToken: currentUserProfile?.googleAccount?.accessToken,
-        refreshToken: currentUserProfile?.googleAccount?.refreshToken,
+      const response = await bffApi.addGoogleCalendarEvent({
+        accessToken: currentUserProfile.googleAccount.accessToken!,
+        refreshToken: currentUserProfile.googleAccount.refreshToken!,
         calendarId: selectedCalendarId,
         summary: `Ride: ${ride.pickup} → ${ride.dropoff}`,
-        description: `Ride with ${ride.driver?.name || 'Driver'}\n\nPickup: ${ride.pickup}\nDropoff: ${ride.dropoff}\nFare: $${ride.fare.toFixed(2)}${ride.transportType ? `\nTransport: ${ride.transportType} ${ride.transportNumber || ''}` : ''}`,
+        description: `Ride with ${ride.driver?.name || 'Driver'}\n\nPickup: ${ride.pickup}\nDropoff: ${ride.dropoff}\nFare: $${Object.values(ride.fees ?? {}).reduce((sum: number, v) => sum + (typeof v === 'number' ? v : 0), 0).toFixed(2)}${ride.transportType ? `\nTransport: ${ride.transportType} ${ride.transportNumber || ''}` : ''}`,
         location: ride.pickup,
         startDateTime: startDateTime.toISOString(),
         endDateTime: endDateTime.toISOString(),
         attendees: ride.driver?.googleAccount?.email ? [ride.driver.googleAccount.email] : [],
         timeZone: 'America/New_York'
-      };
-
-      const response = await fetch('/api/google-calendar/add-event', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(eventData),
       });
 
-      const result = await response.json();
-
-      if (result.success) {
-        const calendarName = result.calendar?.summary || 
-                            currentUserProfile?.googleAccount?.selectedCalendarName || 
+      if (response.success && response.data?.success) {
+        const calendarName = currentUserProfile.googleAccount.selectedCalendarName || 
                             'Google Calendar';
         
         toast({
@@ -102,7 +96,7 @@ function UserPageContent() {
           description: `Your ride has been added to ${calendarName}`,
         });
       } else {
-        throw new Error(result.error || 'Failed to add event');
+        throw new Error(response.error || 'Failed to add event');
       }
     } catch (error) {
       console.error('Error auto-adding to calendar:', error);

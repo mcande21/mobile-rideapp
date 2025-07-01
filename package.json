@@ -11,6 +11,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
+    "test:bff": "tsx scripts/test-bff.ts",
+    "check:migration": "./scripts/check-migration.sh",
     "ios": "npx cap open ios",
     "android": "npx cap open android",
     "cap:sync": "npx cap sync",
@@ -62,7 +64,6 @@
     "clsx": "^2.1.1",
     "date-fns": "^3.6.0",
     "date-fns-tz": "^3.2.0",
-    "dotenv": "^16.5.0",
     "firebase": "^11.9.1",
     "firebase-admin": "^12.6.0",
     "firebase-functions": "^6.3.2",
@@ -85,9 +86,10 @@
     "zustand": "^4.5.7"
   },
   "devDependencies": {
-    "@types/node": "^20.19.1",
+    "@types/node": "^20.19.2",
     "@types/react": "^19.1.8",
     "@types/react-dom": "^19.1.6",
+    "dotenv": "^17.0.0",
     "eslint": "9.30.0",
     "eslint-config-next": "15.3.4",
     "genkit-cli": "^1.13.0",

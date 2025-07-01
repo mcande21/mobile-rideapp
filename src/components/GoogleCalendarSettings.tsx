@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import { useRideStore } from '@/lib/store';
 import { doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
+import { bffApi, BffApiService } from '@/lib/bff-api';
 
 interface Calendar {
   id: string;
@@ -53,30 +54,26 @@ export function GoogleCalendarSettings() {
     setLastRefresh(now);
     setIsLoading(true);
     try {
-      const response = await fetch('/api/google-calendar/list-calendars', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          accessToken: currentUserProfile.googleAccount.accessToken,
-          refreshToken: currentUserProfile.googleAccount.refreshToken,
-        }),
-      });
+      const response = await bffApi.listGoogleCalendars(currentUserProfile.id);
 
-      const result = await response.json();
-      if (result.success) {
-        setCalendars(result.calendars);
+      if (response.success && response.data?.calendars) {
+        setCalendars(response.data.calendars);
         
         // If no calendar is selected, default to primary
         if (!selectedCalendar) {
-          const primaryCalendar = result.calendars.find((cal: Calendar) => cal.primary);
+          const primaryCalendar = response.data.calendars.find((cal: Calendar) => cal.primary);
           if (primaryCalendar) {
             handleCalendarSelect(primaryCalendar);
           }
         }
-      } else if (result.needsReauth) {
-        alert('Your Google Calendar access has expired. Please reconnect your Google account.');
+      } else {
+        // Handle authentication errors
+        if (response.status === 401) {
+          alert('Your Google Calendar access has expired. Please reconnect your Google account.');
+        } else {
+          console.error('Failed to load calendars:', response.error);
+          alert('Failed to load calendars. Please try again.');
+        }
       }
     } catch (error) {
       console.error('Error loading calendars:', error);

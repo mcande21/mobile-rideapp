@@ -3,6 +3,7 @@
 import { usePathname } from 'next/navigation';
 import { Header } from '@/components/Header';
 import { useRideStore } from '@/lib/store';
+import { MobileUtils } from '@/lib/mobile-utils';
 import { useEffect } from 'react';
 
 export function ClientLayout({ children }: { children: React.ReactNode }) {
@@ -11,6 +12,10 @@ export function ClientLayout({ children }: { children: React.ReactNode }) {
   const { initAuth } = useRideStore();
 
   useEffect(() => {
+    // Initialize mobile app (handles splash screen hiding, status bar, etc.)
+    MobileUtils.initializeApp();
+    
+    // Initialize authentication
     const unsubscribe = initAuth();
     return () => {
       if(unsubscribe) unsubscribe();

@@ -17,21 +17,38 @@ export class MobileUtils {
   }
 
   static async initializeApp(): Promise<void> {
-    if (!this.isNative()) return;
+    if (!this.isNative()) {
+      console.log('Running in web mode, skipping mobile initialization');
+      return;
+    }
 
     try {
+      console.log('🚀 Initializing mobile app...');
+      
+      // Small delay to ensure app is fully loaded
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       // Hide splash screen
+      console.log('🎨 Hiding splash screen...');
       await SplashScreen.hide();
 
       // Set status bar style
+      console.log('📱 Configuring status bar...');
       await StatusBar.setStyle({ style: Style.Light });
       
       // Set status bar background color (optional)
       await StatusBar.setBackgroundColor({ color: '#000000' });
 
-      console.log('Mobile app initialized');
+      console.log('✅ Mobile app initialized successfully');
     } catch (error) {
-      console.error('Error initializing mobile app:', error);
+      console.error('❌ Error initializing mobile app:', error);
+      // Even if there's an error, try to hide splash screen
+      try {
+        await SplashScreen.hide();
+        console.log('🎨 Splash screen hidden after error');
+      } catch (splashError) {
+        console.error('❌ Failed to hide splash screen:', splashError);
+      }
     }
   }
 
