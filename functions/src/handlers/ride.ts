@@ -19,7 +19,7 @@ export const acceptRide = onCall(corsOptions, async (request) => {
     driver: {
       id: uid,
       name: driver.name,
-      avatarUrl: driver.avatarUrl,
+      avatarUrl: driver.avatarUrl || null,
       role: driver.role,
       venmoUsername: driver.venmoUsername || "Alex-Meisler",
       phoneNumber: driver.phoneNumber,

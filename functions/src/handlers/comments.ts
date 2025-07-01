@@ -31,7 +31,7 @@ export const addComment = onCall(corsOptions, async (request) => {
     user: {
       id: uid,
       name: user.name,
-      avatarUrl: user.avatarUrl,
+      avatarUrl: user.avatarUrl || null,
     },
     createdAt: new Date(),
   };

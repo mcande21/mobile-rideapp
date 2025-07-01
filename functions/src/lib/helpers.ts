@@ -12,7 +12,7 @@ export const isDriver = async (
   if (!user || user.role !== "driver") {
     throw new HttpsError("permission-denied", "User is not a driver.");
   }
-  return user;
+  return { id: userDoc.id, ...user };
 };
 
 // Helper to hash a string with SHA-256

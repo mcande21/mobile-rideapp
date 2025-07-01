@@ -48,6 +48,7 @@ interface RideState {
   currentUserProfile: User | null;
   loading: boolean;
   error: string | null;
+  unsubRides: (() => void) | null; // Add property to hold the listener
 
   // --- AUTH METHODS ---
   initAuth: () => (() => void) | void;
@@ -123,6 +124,7 @@ interface RideState {
 
   // --- UTILITY METHODS ---
   cleanupOldDeniedRides: () => Promise<void>;
+  cleanupListeners: () => void; // Add method to interface
 }
 
 export const useRideStore = create<RideState>((set, get) => ({
@@ -132,6 +134,7 @@ export const useRideStore = create<RideState>((set, get) => ({
   currentUserProfile: null,
   loading: true,
   error: null,
+  unsubRides: null, // Initialize state property
 
   // --- AUTH METHODS ---
   initAuth: () => {
@@ -140,30 +143,28 @@ export const useRideStore = create<RideState>((set, get) => ({
       return () => {};
     }
 
-    let unsubRides: (() => void) | undefined = undefined;
-    const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      set({ currentUser: user });
-      // Unsubscribe from previous rides listener if it exists
-      if (unsubRides) {
-        unsubRides();
-        unsubRides = undefined;
-      }
+    const onAuthChangeUnsubscribe = onAuthStateChanged(auth, async (user) => {
+      // 1. Clean up previous listener FIRST.
+      get().cleanupListeners();
+
+      // 2. Reset state for the new user or logged-out state.
+      set({
+        currentUser: user,
+        currentUserProfile: null,
+        rides: [],
+        // Stop loading if logged out, otherwise wait for profile/rides to load.
+        loading: !!user,
+      });
+
       if (user) {
-        // Try to get user document with retry mechanism for new users
+        // 3. Fetch user profile.
         let userDoc;
         let retries = 3;
         const userDocRef = doc(db!, "users", user.uid);
-
         while (retries > 0) {
           userDoc = await getDoc(userDocRef);
-          if (userDoc.exists()) {
-            break;
-          }
-          // If document doesn't exist, wait a bit and retry
-          // This handles the case where Google sign-up is still creating the document
-          if (retries > 1) {
-            await new Promise((resolve) => setTimeout(resolve, 500));
-          }
+          if (userDoc.exists()) break;
+          await new Promise((resolve) => setTimeout(resolve, 500));
           retries--;
         }
 
@@ -171,101 +172,82 @@ export const useRideStore = create<RideState>((set, get) => ({
           const profile = { id: user.uid, ...userDoc.data() } as User;
           set({ currentUserProfile: profile });
 
+          // 4. Set up new role-based listener.
           const ridesCollection = collection(db!, "rides");
-          // --- START REPLACEMENT LOGIC ---
+          let newUnsub: () => void;
+
           if (profile.role === "driver") {
-            // --- DRIVER ---
-            // 1. Get all pending rides
+            // --- Corrected Driver Logic ---
+            let pendingRides: Ride[] = [];
+            let acceptedRides: Ride[] = [];
+
+            const combineAndSetRides = () => {
+              const allRides = [...pendingRides, ...acceptedRides];
+              const uniqueRides = Array.from(
+                new Map(allRides.map((ride) => [ride.id, ride])).values()
+              );
+              set({
+                rides: uniqueRides.sort(
+                  (a, b) =>
+                    (b.createdAt?.toMillis() ?? 0) -
+                    (a.createdAt?.toMillis() ?? 0)
+                ),
+              });
+            };
+
             const pendingQuery = query(
               ridesCollection,
               where("status", "==", "pending")
             );
-            // 2. Get all rides accepted by THIS driver
             const acceptedQuery = query(
               ridesCollection,
               where("driver.id", "==", user.uid)
             );
 
-            // Listen to both queries and combine the results
-            const unsubPending = onSnapshot(
-              pendingQuery,
-              (pendingSnapshot) => {
-                const pendingRides = pendingSnapshot.docs.map(
-                  (doc) => ({ id: doc.id, ...doc.data() } as Ride)
-                );
-                const unsubAccepted = onSnapshot(
-                  acceptedQuery,
-                  (acceptedSnapshot) => {
-                    const acceptedRides = acceptedSnapshot.docs.map(
-                      (doc) => ({ id: doc.id, ...doc.data() } as Ride)
-                    );
-                    // Combine and remove duplicates (if any)
-                    const allRides = [...pendingRides, ...acceptedRides];
-                    const uniqueRides = Array.from(
-                      new Map(allRides.map((ride) => [ride.id, ride])).values()
-                    );
-                    set({
-                      rides: uniqueRides.sort(
-                        (a, b) =>
-                          (b.createdAt?.toMillis() ?? 0) -
-                          (a.createdAt?.toMillis() ?? 0)
-                      ),
-                    });
-                  }
-                );
-                unsubRides = () => {
-                  unsubPending();
-                  unsubAccepted();
-                };
-              }
-            );
+            const unsubPending = onSnapshot(pendingQuery, (snapshot) => {
+              pendingRides = snapshot.docs.map(
+                (d) => ({ id: d.id, ...d.data() } as Ride)
+              );
+              combineAndSetRides();
+            });
+
+            const unsubAccepted = onSnapshot(acceptedQuery, (snapshot) => {
+              acceptedRides = snapshot.docs.map(
+                (d) => ({ id: d.id, ...d.data() } as Ride)
+              );
+              combineAndSetRides();
+            });
+
+            // Create the combined unsubscribe function immediately.
+            newUnsub = () => {
+              unsubPending();
+              unsubAccepted();
+            };
           } else {
-            // --- REGULAR USER ---
-            // Get only the rides created by this user
+            // --- User Logic ---
             const userRidesQuery = query(
               ridesCollection,
               where("user.id", "==", user.uid)
             );
-            unsubRides = onSnapshot(userRidesQuery, (snapshot) => {
+            newUnsub = onSnapshot(userRidesQuery, (snapshot) => {
               const rides = snapshot.docs.map(
-                (doc) => ({ id: doc.id, ...doc.data() } as Ride)
+                (d) => ({ id: d.id, ...d.data() } as Ride)
               );
               set({ rides });
             });
           }
-          // --- END REPLACEMENT LOGIC ---
-          set({ loading: false });
-          return unsubRides; // This will now be the correct, role-specific unsubscribe function
-        } else {
-          // If user document still doesn't exist after retries, set to null
-          // This will trigger the sign-in page logic
-          set({ currentUserProfile: null });
-        }
 
-        const ridesCollection = collection(db!, "rides");
-        const q = query(ridesCollection, orderBy("createdAt", "desc"));
-        unsubRides = onSnapshot(q, (snapshot) => {
-          const rides = snapshot.docs.map(
-            (doc) => ({ id: doc.id, ...doc.data() } as Ride)
-          );
-          set({ rides });
-        });
-        set({ loading: false });
-        return unsubRides;
-      } else {
-        set({
-          currentUser: null,
-          currentUserProfile: null,
-          rides: [],
-          loading: false,
-        });
-        // Unsubscribe from rides listener if it exists
-        if (unsubRides) {
-          unsubRides = undefined;
+          // 5. Save the new unsubscribe function to state immediately.
+          set({ unsubRides: newUnsub, loading: false });
+        } else {
+          // User document doesn't exist, stop loading.
+          set({ loading: false });
         }
       }
+      // No 'else' needed, state is already cleared at the top.
     });
-    return unsubscribe;
+
+    return onAuthChangeUnsubscribe;
   },
   login: async (email, password) => {
     if (!auth) throw new Error("Firebase not configured");
@@ -282,6 +264,7 @@ export const useRideStore = create<RideState>((set, get) => ({
 
     await setDoc(doc(db, "users", user.uid), {
       name,
+      email,
       role: "user",
       avatarUrl: `https://placehold.co/100x100.png`,
       phoneNumber,
@@ -345,7 +328,9 @@ export const useRideStore = create<RideState>((set, get) => ({
   },
   logout: async () => {
     if (!auth) throw new Error("Firebase not configured");
+    get().cleanupListeners(); // Call cleanup function on logout
     await signOut(auth);
+    // State is already cleared by the onAuthStateChanged listener
   },
 
   // --- USER PROFILE METHODS ---
@@ -384,11 +369,11 @@ export const useRideStore = create<RideState>((set, get) => ({
           name: data.name || "",
           avatarUrl: data.avatarUrl || "",
           role: data.role || "user",
-          phoneNumber: data.phoneNumber,
-          homeAddress: data.homeAddress,
-          venmoUsername: data.venmoUsername,
-          customAvatar: data.customAvatar,
-          googleAccount: data.googleAccount,
+          phoneNumber: data.phoneNumber || null,
+          homeAddress: data.homeAddress || null,
+          venmoUsername: data.venmoUsername || null,
+          customAvatar: data.customAvatar || null,
+          googleAccount: data.googleAccount || null,
         },
       });
     }
@@ -622,6 +607,13 @@ export const useRideStore = create<RideState>((set, get) => ({
     });
     if (count > 0) {
       await batch.commit();
+    }
+  },
+  cleanupListeners: () => {
+    const unsub = get().unsubRides;
+    if (unsub) {
+      unsub();
+      set({ unsubRides: null });
     }
   },
 }));

@@ -132,7 +132,7 @@ async function getDirections(
           destination: {address: destination},
           travelMode: "DRIVE",
           routingPreference: "TRAFFIC_AWARE_OPTIMAL",
-          departureTime: departureTime.toISOString(),
+          departureTime: departureTime,
           ...(intermediatesArr ? {intermediates: intermediatesArr} : {}),
         }),
       },

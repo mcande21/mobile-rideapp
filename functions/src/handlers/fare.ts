@@ -82,17 +82,42 @@ export const calculateFare = onCall(corsOptions, async (request) => {
       throw new HttpsError("invalid-argument", "Missing required fields");
     }
 
-    const [hours, minutes] = time.split(":").map(Number);
-    const combinedDateTime = new Date(date);
-    combinedDateTime.setHours(hours, minutes, 0, 0);
+    // --- TIMEZONE FIX ---
+    // The client sends date and time in its local timezone. The server needs to
+    // interpret this correctly. We construct the date string in ISO format
+    // and create a Date object from it, which will be in UTC.
+    const dateTimeString = `${date}T${time}:00`;
+    const timeZone = "America/New_York";
+    const combinedDateTime = new Date(
+        new Date(dateTimeString).toLocaleString("en-US", {timeZone}),
+    );
+
+    // Validate that the constructed time is in the future.
+    if (combinedDateTime.getTime() <= Date.now()) {
+      throw new HttpsError(
+          "invalid-argument",
+          "The ride time must be in the future.",
+      );
+    }
+    // --- END FIX ---
 
     const isTransportTrip =
       isTransportLocation(pickup) || isTransportLocation(dropoff);
 
     if (isRoundTrip && isTransportTrip && returnDate && returnTime) {
-      const [returnHours, returnMinutes] = returnTime.split(":").map(Number);
-      const returnDateTime = new Date(returnDate);
-      returnDateTime.setHours(returnHours, returnMinutes, 0, 0);
+      // --- TIMEZONE FIX FOR RETURN TRIP ---
+      const returnDateTimeString = `${returnDate}T${returnTime}:00`;
+      const returnDateTime = new Date(
+          new Date(returnDateTimeString).toLocaleString("en-US", {timeZone}),
+      );
+
+      if (returnDateTime.getTime() <= combinedDateTime.getTime()) {
+        throw new HttpsError(
+            "invalid-argument",
+            "Return time must be after the departure time.",
+        );
+      }
+      // --- END FIX ---
 
       const breakdown = await calculateTransportRoundTripFare(
           pickup,
@@ -101,7 +126,7 @@ export const calculateFare = onCall(corsOptions, async (request) => {
           returnDateTime,
           stops,
       );
-      return breakdown;
+      return {breakdown};
     } else {
       const calculatedFare = await calculateTripFare(
           pickup,

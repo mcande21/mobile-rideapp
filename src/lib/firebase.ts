@@ -25,7 +25,7 @@ const isConfigured = !!(
 const app = isConfigured && !getApps().length ? initializeApp(firebaseConfig) : (isConfigured ? getApp() : undefined);
 const auth = app ? getAuth(app) : undefined;
 const db = app ? getFirestore(app) : undefined;
-const functions = app ? getFunctions(app) : undefined;
+const functions = app ? getFunctions(app, "us-central1") : undefined;
 // const storage = app ? getStorage(app) : undefined;
 
 // Connect to emulators if running locally

@@ -300,10 +300,10 @@ export function UserDashboard() {
           const response: any = await calculateFareFn({
             pickup,
             dropoff,
-            date: date.toISOString(),
+            date: date.toISOString().split('T')[0],
             time,
             isRoundTrip,
-            returnDate: returnDate?.toISOString(),
+            returnDate: returnDate?.toISOString().split('T')[0],
             returnTime,
             stops,
           });
@@ -359,7 +359,7 @@ export function UserDashboard() {
           const response: any = await calculateFareFn({
             pickup: editPickup,
             dropoff: editDropoff,
-            date: editDate.toISOString(),
+            date: editDate.toISOString().split('T')[0],
             time: editTime,
             isRoundTrip: editIsRoundTrip,
             stops,
