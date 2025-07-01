@@ -1,0 +1,80 @@
+/* Mobile-specific styles for Capacitor app */
+
+.mobile-app {
+  /* Prevent text selection on mobile */
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+  
+  /* Prevent callouts on iOS */
+  -webkit-touch-callout: none;
+  
+  /* Prevent zoom on mobile */
+  touch-action: manipulation;
+  
+  /* Safe area handling */
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Button styles for mobile */
+.mobile-app button {
+  /* Prevent button highlight on mobile */
+  -webkit-tap-highlight-color: transparent;
+  
+  /* Improve touch targets */
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Input styles for mobile */
+.mobile-app input,
+.mobile-app textarea {
+  /* Prevent zoom on input focus on iOS */
+  font-size: 16px;
+}
+
+/* Scroll improvements for mobile */
+.mobile-app {
+  /* Smooth scrolling */
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+
+/* Hide scrollbars on mobile */
+.mobile-app::-webkit-scrollbar {
+  display: none;
+}
+
+.mobile-app {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Status bar styles */
+.status-bar-spacer {
+  height: env(safe-area-inset-top);
+  background-color: #000;
+}
+
+/* Bottom safe area */
+.bottom-safe-area {
+  height: env(safe-area-inset-bottom);
+}
+
+/* Mobile-specific animations */
+@media (prefers-reduced-motion: no-preference) {
+  .mobile-app {
+    transition: transform 0.3s ease-out;
+  }
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .mobile-app {
+    color-scheme: dark;
+  }
+}
