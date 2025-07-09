@@ -1,6 +1,6 @@
 /**
- * Mobile Configuration for BFF API
- * Environment-specific settings for mobile app deployment
+ * Production-Ready Mobile Configuration
+ * Environment-aware configuration for development, staging, and production
  */
 
 interface MobileConfig {
@@ -19,13 +19,14 @@ interface MobileConfig {
     enableCertificatePinning: boolean;
     enableRequestSigning: boolean;
   };
+  environment: 'development' | 'staging' | 'production';
 }
 
 /**
- * Get configuration based on environment
+ * Get environment-aware configuration
  */
 export function getMobileConfig(): MobileConfig {
-  const isDevelopment = process.env.NODE_ENV === 'development';
+  const environment = (process.env.NODE_ENV as 'development' | 'staging' | 'production') || 'development';
   const isCapacitor = typeof window !== 'undefined' && (window as any).Capacitor?.isNativePlatform();
   
   // Base configuration
@@ -42,24 +43,61 @@ export function getMobileConfig(): MobileConfig {
       pushNotifications: isCapacitor,
     },
     security: {
-      enableCertificatePinning: !isDevelopment && isCapacitor,
-      enableRequestSigning: !isDevelopment,
+      enableCertificatePinning: environment === 'production' && isCapacitor,
+      enableRequestSigning: environment !== 'development',
     },
+    environment,
   };
 
   // Set API base URL based on environment
   if (typeof window !== 'undefined') {
     // Browser environment
     if (isCapacitor) {
-      // For production mobile app
-      config.api.baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'https://your-production-api.com';
+      // Mobile app - use environment-specific endpoints
+      switch (environment) {
+        case 'development':
+          config.api.baseUrl = process.env.NEXT_PUBLIC_DEV_API_URL || 'http://192.168.1.240:5001';
+          break;
+        case 'staging':
+          config.api.baseUrl = process.env.NEXT_PUBLIC_STAGING_API_URL || 'https://staging-api.rideappstudio.com';
+          break;
+        case 'production':
+          config.api.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.rideappstudio.com';
+          break;
+        default:
+          config.api.baseUrl = 'https://api.rideappstudio.com';
+      }
     } else {
-      // For web development/production
-      config.api.baseUrl = window.location.origin;
+      // Web app - use environment-specific endpoints
+      switch (environment) {
+        case 'development':
+          config.api.baseUrl = process.env.NEXT_PUBLIC_DEV_API_URL || 'http://localhost:5001';
+          break;
+        case 'staging':
+          config.api.baseUrl = process.env.NEXT_PUBLIC_STAGING_API_URL || 'https://staging-api.rideappstudio.com';
+          break;
+        case 'production':
+          config.api.baseUrl = process.env.NEXT_PUBLIC_API_URL || window.location.origin;
+          break;
+        default:
+          config.api.baseUrl = window.location.origin;
+      }
     }
   } else {
-    // Node.js environment (like scripts)
-    config.api.baseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:9002';
+    // Node.js environment (SSR, scripts, etc.)
+    switch (environment) {
+      case 'development':
+        config.api.baseUrl = process.env.NEXT_PUBLIC_DEV_API_URL || 'http://localhost:5001';
+        break;
+      case 'staging':
+        config.api.baseUrl = process.env.NEXT_PUBLIC_STAGING_API_URL || 'https://staging-api.rideappstudio.com';
+        break;
+      case 'production':
+        config.api.baseUrl = process.env.NEXT_PUBLIC_API_URL || 'https://api.rideappstudio.com';
+        break;
+      default:
+        config.api.baseUrl = 'https://api.rideappstudio.com';
+    }
   }
 
   return config;

@@ -22,11 +22,15 @@
 
 # local environment variables
 .env
-.env.*
 .env.local
 .env.development.local
 .env.test.local
 .env.production.local
+
+# Allow environment templates but exclude local overrides
+!.env.production
+!.env.staging
+!.env.development
 
 # macOS system files
 .DS_Store
