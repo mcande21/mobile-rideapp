@@ -7,4 +7,9 @@ typings/
 
 # Node.js dependency directory
 node_modules/
+
+# Environment files
+.env.local
 *.local
+.env.staging
+

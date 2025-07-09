@@ -26,6 +26,8 @@
 .env.development.local
 .env.test.local
 .env.production.local
+.env.*
+.env.staging
 
 # Allow environment templates but exclude local overrides
 !.env.production
