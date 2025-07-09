@@ -29,11 +29,6 @@
 .env.*
 .env.staging
 
-# Allow environment templates but exclude local overrides
-!.env.production
-!.env.staging
-!.env.development
-
 # macOS system files
 .DS_Store
 
